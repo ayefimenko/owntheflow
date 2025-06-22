@@ -1,4 +1,54 @@
+'use client'
+
+import { useState } from 'react'
+import { useAuth } from '@/contexts/AuthContext'
+import AuthForm from '@/components/AuthForm'
+import UserProfile from '@/components/UserProfile'
+
 export default function Home() {
+  const { user, loading } = useAuth()
+  const [authMode, setAuthMode] = useState<'signin' | 'signup'>('signin')
+  const [showAuth, setShowAuth] = useState(false)
+
+  const toggleAuthMode = () => {
+    setAuthMode(authMode === 'signin' ? 'signup' : 'signin')
+  }
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading...</p>
+        </div>
+      </div>
+    )
+  }
+
+  if (user) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center px-4">
+        <UserProfile />
+      </div>
+    )
+  }
+
+  if (showAuth) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center px-4">
+        <div className="w-full max-w-md">
+          <button
+            onClick={() => setShowAuth(false)}
+            className="mb-4 text-blue-600 hover:text-blue-700 font-medium flex items-center"
+          >
+            ← Back to home
+          </button>
+          <AuthForm mode={authMode} onToggleMode={toggleAuthMode} />
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center px-4">
       <div className="max-w-4xl mx-auto text-center">
@@ -35,6 +85,30 @@ export default function Home() {
           </div>
         </div>
 
+        {/* Authentication CTA */}
+        <div className="mb-8">
+          <div className="flex gap-4 justify-center">
+            <button
+              onClick={() => {
+                setAuthMode('signup')
+                setShowAuth(true)
+              }}
+              className="bg-blue-600 text-white px-8 py-3 rounded-lg font-medium hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors"
+            >
+              Get Started
+            </button>
+            <button
+              onClick={() => {
+                setAuthMode('signin')
+                setShowAuth(true)
+              }}
+              className="bg-white text-blue-600 px-8 py-3 rounded-lg font-medium border-2 border-blue-600 hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors"
+            >
+              Sign In
+            </button>
+          </div>
+        </div>
+
         {/* Development Status */}
         <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 rounded-r-lg">
           <div className="flex items-center">
@@ -46,7 +120,7 @@ export default function Home() {
                 Development in Progress
               </h3>
               <p className="text-sm text-yellow-700 mt-1">
-                MVP Sprint 1: Core Setup & Auth - Next.js + Tailwind CSS ✅
+                MVP Sprint 1: Core Setup & Auth - Supabase Authentication ✅
               </p>
             </div>
           </div>

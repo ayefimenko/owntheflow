@@ -5,6 +5,7 @@ import { useAuth } from '@/contexts/AuthContext'
 import { ContentService } from '@/lib/content'
 import PermissionGuard, { AdminOnly } from './PermissionGuard'
 import Modal from './Modal'
+import ContentPreview from './ContentPreview'
 import LearningPathForm from './LearningPathForm'
 import CourseForm from './CourseForm'
 import ModuleForm from './ModuleForm'
@@ -55,6 +56,10 @@ export default function ContentDashboard() {
   const [editingLesson, setEditingLesson] = useState<Lesson | undefined>(undefined)
   const [showChallengeModal, setShowChallengeModal] = useState(false)
   const [editingChallenge, setEditingChallenge] = useState<Challenge | undefined>(undefined)
+  
+  // Preview modal states
+  const [showPreviewModal, setShowPreviewModal] = useState(false)
+  const [previewLesson, setPreviewLesson] = useState<Lesson | undefined>(undefined)
 
   // Memoized data loading function to prevent unnecessary re-renders
   const loadDashboardData = useCallback(async () => {
@@ -223,6 +228,17 @@ export default function ContentDashboard() {
     setEditingChallenge(undefined)
   }, [])
 
+  // Preview handlers
+  const handlePreviewLesson = useCallback((lesson: Lesson) => {
+    setPreviewLesson(lesson)
+    setShowPreviewModal(true)
+  }, [])
+
+  const handlePreviewModalClose = useCallback(() => {
+    setShowPreviewModal(false)
+    setPreviewLesson(undefined)
+  }, [])
+
   // Show error state
   if (error) {
     return (
@@ -332,7 +348,7 @@ export default function ContentDashboard() {
         )}
 
         {activeTab === 'lessons' && (
-          <LessonsTab lessons={lessons} onRefresh={loadDashboardData} onCreateLesson={handleCreateLesson} onEditLesson={handleEditLesson} />
+          <LessonsTab lessons={lessons} onRefresh={loadDashboardData} onCreateLesson={handleCreateLesson} onEditLesson={handleEditLesson} onPreviewLesson={handlePreviewLesson} />
         )}
 
         {activeTab === 'challenges' && (
@@ -403,6 +419,17 @@ export default function ContentDashboard() {
             onSave={handleChallengeSaved}
             onCancel={handleChallengeModalClose}
           />
+        </Modal>
+
+        <Modal
+          isOpen={showPreviewModal}
+          onClose={handlePreviewModalClose}
+          title="Lesson Preview"
+          size="xl"
+        >
+          {previewLesson && (
+            <ContentPreview lesson={previewLesson} />
+          )}
         </Modal>
       </div>
     </div>
@@ -874,12 +901,14 @@ function LessonsTab({
   lessons, 
   onRefresh, 
   onCreateLesson, 
-  onEditLesson 
+  onEditLesson,
+  onPreviewLesson
 }: { 
   lessons: Lesson[]
   onRefresh: () => void
   onCreateLesson: () => void
   onEditLesson: (lesson: Lesson) => void
+  onPreviewLesson: (lesson: Lesson) => void
 }) {
   return (
     <div className="space-y-6">
@@ -956,6 +985,12 @@ function LessonsTab({
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
+                    <button 
+                      onClick={() => onPreviewLesson(lesson)}
+                      className="text-green-600 hover:text-green-700"
+                    >
+                      Preview
+                    </button>
                     <button 
                       onClick={() => onEditLesson(lesson)}
                       className="text-blue-600 hover:text-blue-700"

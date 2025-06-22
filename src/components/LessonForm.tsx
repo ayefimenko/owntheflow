@@ -1,8 +1,15 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import dynamic from 'next/dynamic'
 import { Lesson, CreateLessonDto, UpdateLessonDto, Module, ContentStatus, LessonType } from '@/types/content'
 import { ContentService } from '@/lib/content'
+
+// Dynamically import the markdown editor to avoid SSR issues
+const MDEditor = dynamic(
+  () => import('@uiw/react-md-editor').then((mod) => mod.default),
+  { ssr: false }
+)
 
 interface LessonFormProps {
   lesson?: Lesson
@@ -32,6 +39,7 @@ export default function LessonForm({ lesson, moduleId, onSave, onCancel }: Lesso
   const [modules, setModules] = useState<Module[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [showPreview, setShowPreview] = useState(false)
 
   // Load modules for selection
   useEffect(() => {
@@ -134,295 +142,362 @@ export default function LessonForm({ lesson, moduleId, onSave, onCancel }: Lesso
     }))
   }
 
+  const handleContentChange = (value?: string) => {
+    setFormData(prev => ({
+      ...prev,
+      content: value || ''
+    }))
+  }
+
+  const handleSaveAsDraft = async () => {
+    const currentStatus = formData.status
+    setFormData(prev => ({ ...prev, status: 'draft' }))
+    
+    // Create a form event to trigger submission
+    const form = document.querySelector('form') as HTMLFormElement
+    if (form) {
+      const event = new Event('submit', { bubbles: true, cancelable: true })
+      form.dispatchEvent(event)
+    }
+    
+    // Restore original status if needed
+    setTimeout(() => {
+      setFormData(prev => ({ ...prev, status: currentStatus }))
+    }, 100)
+  }
+
+  const getStatusBadgeColor = (status: ContentStatus) => {
+    switch (status) {
+      case 'published': return 'bg-green-100 text-green-800'
+      case 'draft': return 'bg-yellow-100 text-yellow-800'
+      case 'archived': return 'bg-gray-100 text-gray-800'
+      default: return 'bg-gray-100 text-gray-800'
+    }
+  }
+
   return (
-    <form onSubmit={handleSubmit} className="space-y-6">
-      <div className="space-y-4">
-        <h3 className="text-lg font-medium text-gray-900">
-          {lesson ? 'Edit Lesson' : 'Create New Lesson'}
-        </h3>
-
-        {error && (
-          <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
-            {error}
+    <div className="max-w-4xl mx-auto">
+      <form onSubmit={handleSubmit} className="space-y-6">
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <h3 className="text-lg font-medium text-gray-900">
+              {lesson ? 'Edit Lesson' : 'Create New Lesson'}
+            </h3>
+            <div className="flex items-center space-x-2">
+              <span className={`px-2 py-1 text-xs font-medium rounded-full ${getStatusBadgeColor(formData.status)}`}>
+                {formData.status.charAt(0).toUpperCase() + formData.status.slice(1)}
+              </span>
+              <button
+                type="button"
+                onClick={() => setShowPreview(!showPreview)}
+                className="px-3 py-1 text-sm bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 transition-colors"
+              >
+                {showPreview ? 'Hide Preview' : 'Show Preview'}
+              </button>
+            </div>
           </div>
-        )}
 
-        {/* Module Selection */}
-        <div>
-          <label htmlFor="module_id" className="block text-sm font-medium text-gray-700">
-            Module *
-          </label>
-          <select
-            id="module_id"
-            name="module_id"
-            value={formData.module_id}
-            onChange={handleInputChange}
-            required
-            disabled={!!moduleId} // Disable if moduleId is provided (creating from module context)
-            className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-gray-900"
-          >
-            <option value="">Select a module</option>
-            {modules.map(module => (
-              <option key={module.id} value={module.id}>
-                {module.title}
-              </option>
-            ))}
-          </select>
-        </div>
+          {error && (
+            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
+              {error}
+            </div>
+          )}
 
-        {/* Title */}
-        <div>
-          <label htmlFor="title" className="block text-sm font-medium text-gray-700">
-            Title *
-          </label>
-          <input
-            type="text"
-            id="title"
-            name="title"
-            value={formData.title}
-            onChange={handleInputChange}
-            required
-            className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-gray-900"
-            placeholder="Enter lesson title"
-          />
-        </div>
-
-        {/* Slug */}
-        <div>
-          <label htmlFor="slug" className="block text-sm font-medium text-gray-700">
-            Slug *
-          </label>
-          <input
-            type="text"
-            id="slug"
-            name="slug"
-            value={formData.slug}
-            onChange={handleInputChange}
-            required
-            className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-gray-900"
-            placeholder="lesson-slug"
-          />
-        </div>
-
-        {/* Lesson Type */}
-        <div>
-          <label htmlFor="lesson_type" className="block text-sm font-medium text-gray-700">
-            Lesson Type *
-          </label>
-          <select
-            id="lesson_type"
-            name="lesson_type"
-            value={formData.lesson_type}
-            onChange={handleInputChange}
-            required
-            className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-gray-900"
-          >
-            <option value="reading">Reading</option>
-            <option value="video">Video</option>
-            <option value="interactive">Interactive</option>
-            <option value="quiz">Quiz</option>
-          </select>
-        </div>
-
-        {/* Summary */}
-        <div>
-          <label htmlFor="summary" className="block text-sm font-medium text-gray-700">
-            Summary
-          </label>
-          <textarea
-            id="summary"
-            name="summary"
-            value={formData.summary}
-            onChange={handleInputChange}
-            rows={2}
-            className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-gray-900"
-            placeholder="Brief summary of the lesson"
-          />
-        </div>
-
-        {/* Content */}
-        <div>
-          <label htmlFor="content" className="block text-sm font-medium text-gray-700">
-            Content (Markdown)
-          </label>
-          <textarea
-            id="content"
-            name="content"
-            value={formData.content}
-            onChange={handleInputChange}
-            rows={8}
-            className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-gray-900 font-mono"
-            placeholder="# Lesson Content
-
-Write your lesson content in Markdown format..."
-          />
-        </div>
-
-        {/* Video Fields (conditional) */}
-        {formData.lesson_type === 'video' && (
-          <>
+          {/* Basic Information */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Module Selection */}
             <div>
-              <label htmlFor="video_url" className="block text-sm font-medium text-gray-700">
-                Video URL
+              <label htmlFor="module_id" className="block text-sm font-medium text-gray-700">
+                Module *
               </label>
-              <input
-                type="url"
-                id="video_url"
-                name="video_url"
-                value={formData.video_url}
+              <select
+                id="module_id"
+                name="module_id"
+                value={formData.module_id}
                 onChange={handleInputChange}
+                required
+                disabled={!!moduleId}
                 className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-gray-900"
-                placeholder="https://example.com/video.mp4"
-              />
+              >
+                <option value="">Select a module</option>
+                {modules.map(module => (
+                  <option key={module.id} value={module.id}>
+                    {module.title}
+                  </option>
+                ))}
+              </select>
             </div>
 
+            {/* Lesson Type */}
             <div>
-              <label htmlFor="video_duration" className="block text-sm font-medium text-gray-700">
-                Video Duration (seconds)
+              <label htmlFor="lesson_type" className="block text-sm font-medium text-gray-700">
+                Lesson Type *
+              </label>
+              <select
+                id="lesson_type"
+                name="lesson_type"
+                value={formData.lesson_type}
+                onChange={handleInputChange}
+                required
+                className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-gray-900"
+              >
+                <option value="reading">Reading</option>
+                <option value="video">Video</option>
+                <option value="interactive">Interactive</option>
+                <option value="quiz">Quiz</option>
+              </select>
+            </div>
+          </div>
+
+          {/* Title */}
+          <div>
+            <label htmlFor="title" className="block text-sm font-medium text-gray-700">
+              Title *
+            </label>
+            <input
+              type="text"
+              id="title"
+              name="title"
+              value={formData.title}
+              onChange={handleInputChange}
+              required
+              className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-gray-900"
+              placeholder="Enter lesson title"
+            />
+          </div>
+
+          {/* Slug */}
+          <div>
+            <label htmlFor="slug" className="block text-sm font-medium text-gray-700">
+              Slug *
+            </label>
+            <input
+              type="text"
+              id="slug"
+              name="slug"
+              value={formData.slug}
+              onChange={handleInputChange}
+              required
+              className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-gray-900"
+              placeholder="lesson-url-slug"
+            />
+          </div>
+
+          {/* Summary */}
+          <div>
+            <label htmlFor="summary" className="block text-sm font-medium text-gray-700">
+              Summary
+            </label>
+            <textarea
+              id="summary"
+              name="summary"
+              value={formData.summary}
+              onChange={handleInputChange}
+              rows={3}
+              className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-gray-900"
+              placeholder="Brief summary of the lesson content"
+            />
+          </div>
+
+          {/* Content Editor */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Content
+            </label>
+            <div className="border border-gray-300 rounded-md overflow-hidden">
+              <MDEditor
+                value={formData.content}
+                onChange={handleContentChange}
+                preview={showPreview ? 'preview' : 'edit'}
+                height={400}
+                data-color-mode="light"
+              />
+            </div>
+            <p className="mt-1 text-sm text-gray-500">
+              Use Markdown syntax to format your lesson content. Click &quot;Show Preview&quot; to see how it will look.
+            </p>
+          </div>
+
+          {/* Video URL (if video lesson) */}
+          {formData.lesson_type === 'video' && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label htmlFor="video_url" className="block text-sm font-medium text-gray-700">
+                  Video URL
+                </label>
+                <input
+                  type="url"
+                  id="video_url"
+                  name="video_url"
+                  value={formData.video_url}
+                  onChange={handleInputChange}
+                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-gray-900"
+                  placeholder="https://youtube.com/watch?v=..."
+                />
+              </div>
+              <div>
+                <label htmlFor="video_duration" className="block text-sm font-medium text-gray-700">
+                  Video Duration (minutes)
+                </label>
+                <input
+                  type="number"
+                  id="video_duration"
+                  name="video_duration"
+                  value={formData.video_duration}
+                  onChange={handleInputChange}
+                  min="0"
+                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-gray-900"
+                />
+              </div>
+            </div>
+          )}
+
+          {/* Lesson Settings */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div>
+              <label htmlFor="estimated_minutes" className="block text-sm font-medium text-gray-700">
+                Estimated Minutes *
               </label>
               <input
                 type="number"
-                id="video_duration"
-                name="video_duration"
-                value={formData.video_duration}
+                id="estimated_minutes"
+                name="estimated_minutes"
+                value={formData.estimated_minutes}
                 onChange={handleInputChange}
-                min="0"
+                required
+                min="1"
                 className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-gray-900"
-                placeholder="300"
               />
             </div>
-          </>
-        )}
-
-        {/* Estimated Minutes */}
-        <div>
-          <label htmlFor="estimated_minutes" className="block text-sm font-medium text-gray-700">
-            Estimated Minutes *
-          </label>
-          <input
-            type="number"
-            id="estimated_minutes"
-            name="estimated_minutes"
-            value={formData.estimated_minutes}
-            onChange={handleInputChange}
-            required
-            min="1"
-            className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-gray-900"
-            placeholder="15"
-          />
-        </div>
-
-        {/* XP Reward */}
-        <div>
-          <label htmlFor="xp_reward" className="block text-sm font-medium text-gray-700">
-            XP Reward *
-          </label>
-          <input
-            type="number"
-            id="xp_reward"
-            name="xp_reward"
-            value={formData.xp_reward}
-            onChange={handleInputChange}
-            required
-            min="1"
-            className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-gray-900"
-            placeholder="10"
-          />
-        </div>
-
-        {/* Sort Order */}
-        <div>
-          <label htmlFor="sort_order" className="block text-sm font-medium text-gray-700">
-            Sort Order *
-          </label>
-          <input
-            type="number"
-            id="sort_order"
-            name="sort_order"
-            value={formData.sort_order}
-            onChange={handleInputChange}
-            required
-            min="1"
-            className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-gray-900"
-            placeholder="1"
-          />
-        </div>
-
-        {/* SEO Fields */}
-        <div className="border-t border-gray-200 pt-4">
-          <h4 className="text-md font-medium text-gray-900 mb-3">SEO Settings</h4>
-          
-          <div className="space-y-4">
             <div>
-              <label htmlFor="meta_title" className="block text-sm font-medium text-gray-700">
-                Meta Title
+              <label htmlFor="xp_reward" className="block text-sm font-medium text-gray-700">
+                XP Reward *
               </label>
               <input
-                type="text"
-                id="meta_title"
-                name="meta_title"
-                value={formData.meta_title}
+                type="number"
+                id="xp_reward"
+                name="xp_reward"
+                value={formData.xp_reward}
                 onChange={handleInputChange}
+                required
+                min="1"
                 className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-gray-900"
-                placeholder="SEO title for search engines"
               />
             </div>
-
             <div>
-              <label htmlFor="meta_description" className="block text-sm font-medium text-gray-700">
-                Meta Description
+              <label htmlFor="sort_order" className="block text-sm font-medium text-gray-700">
+                Sort Order *
               </label>
-              <textarea
-                id="meta_description"
-                name="meta_description"
-                value={formData.meta_description}
+              <input
+                type="number"
+                id="sort_order"
+                name="sort_order"
+                value={formData.sort_order}
                 onChange={handleInputChange}
-                rows={2}
+                required
+                min="1"
                 className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-gray-900"
-                placeholder="SEO description for search engines"
               />
+            </div>
+          </div>
+
+          {/* SEO Settings */}
+          <div className="border-t pt-4">
+            <h4 className="text-md font-medium text-gray-900 mb-4">SEO Settings</h4>
+            <div className="space-y-4">
+              <div>
+                <label htmlFor="meta_title" className="block text-sm font-medium text-gray-700">
+                  Meta Title
+                </label>
+                <input
+                  type="text"
+                  id="meta_title"
+                  name="meta_title"
+                  value={formData.meta_title}
+                  onChange={handleInputChange}
+                  maxLength={60}
+                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-gray-900"
+                  placeholder="SEO title for search engines"
+                />
+                <p className="mt-1 text-sm text-gray-500">
+                  {formData.meta_title.length}/60 characters
+                </p>
+              </div>
+              <div>
+                <label htmlFor="meta_description" className="block text-sm font-medium text-gray-700">
+                  Meta Description
+                </label>
+                <textarea
+                  id="meta_description"
+                  name="meta_description"
+                  value={formData.meta_description}
+                  onChange={handleInputChange}
+                  maxLength={160}
+                  rows={3}
+                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-gray-900"
+                  placeholder="SEO description for search engines"
+                />
+                <p className="mt-1 text-sm text-gray-500">
+                  {formData.meta_description.length}/160 characters
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Publishing Status */}
+          <div className="border-t pt-4">
+            <h4 className="text-md font-medium text-gray-900 mb-4">Publishing</h4>
+            <div>
+              <label htmlFor="status" className="block text-sm font-medium text-gray-700">
+                Status *
+              </label>
+              <select
+                id="status"
+                name="status"
+                value={formData.status}
+                onChange={handleInputChange}
+                required
+                className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-gray-900"
+              >
+                <option value="draft">Draft</option>
+                <option value="published">Published</option>
+                <option value="archived">Archived</option>
+              </select>
+              <p className="mt-1 text-sm text-gray-500">
+                Only published lessons are visible to learners
+              </p>
             </div>
           </div>
         </div>
 
-        {/* Status (only show for existing lessons) */}
-        {lesson && (
-          <div>
-            <label htmlFor="status" className="block text-sm font-medium text-gray-700">
-              Status
-            </label>
-            <select
-              id="status"
-              name="status"
-              value={formData.status}
-              onChange={handleInputChange}
-              className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-gray-900"
+        {/* Form Actions */}
+        <div className="flex items-center justify-between pt-6 border-t">
+          <button
+            type="button"
+            onClick={onCancel}
+            className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            Cancel
+          </button>
+          
+          <div className="flex space-x-3">
+            <button
+              type="button"
+              onClick={handleSaveAsDraft}
+              className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 border border-gray-300 rounded-md hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-gray-500"
             >
-              <option value="draft">Draft</option>
-              <option value="published">Published</option>
-              <option value="archived">Archived</option>
-            </select>
+              Save as Draft
+            </button>
+            <button
+              type="submit"
+              disabled={loading}
+              className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
+            >
+              {loading ? 'Saving...' : (lesson ? 'Update Lesson' : 'Create Lesson')}
+            </button>
           </div>
-        )}
-      </div>
-
-      {/* Form Actions */}
-      <div className="flex justify-end space-x-3 pt-6 border-t border-gray-200">
-        <button
-          type="button"
-          onClick={onCancel}
-          className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-        >
-          Cancel
-        </button>
-        <button
-          type="submit"
-          disabled={loading}
-          className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          {loading ? 'Saving...' : (lesson ? 'Update Lesson' : 'Create Lesson')}
-        </button>
-      </div>
-    </form>
+        </div>
+      </form>
+    </div>
   )
 } 

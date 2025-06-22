@@ -6,7 +6,7 @@ import AuthForm from '@/components/AuthForm'
 import UserProfile from '@/components/UserProfile'
 
 export default function Home() {
-  const { user, loading } = useAuth()
+  const { user, loading, hydrated } = useAuth()
   const [authMode, setAuthMode] = useState<'signin' | 'signup'>('signin')
   const [showAuth, setShowAuth] = useState(false)
 
@@ -14,7 +14,8 @@ export default function Home() {
     setAuthMode(authMode === 'signin' ? 'signup' : 'signin')
   }
 
-  if (loading) {
+  // Show loading during hydration or auth loading
+  if (!hydrated || loading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center">
         <div className="text-center">
@@ -120,7 +121,7 @@ export default function Home() {
                 Development in Progress
               </h3>
               <p className="text-sm text-yellow-700 mt-1">
-                MVP Sprint 1: Core Setup & Auth - Supabase Authentication ✅
+                MVP Sprint 1: Core Setup & Auth - Role-based Access Control ✅
               </p>
             </div>
           </div>

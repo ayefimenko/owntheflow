@@ -12,6 +12,7 @@ interface AuthContextType {
   session: Session | null
   profile: UserProfile | null
   loading: boolean
+  hydrated: boolean
   signUp: (email: string, password: string, displayName?: string) => Promise<{ error: AuthError | null }>
   signIn: (email: string, password: string) => Promise<{ error: AuthError | null }>
   signOut: () => Promise<{ error: AuthError | null }>
@@ -30,6 +31,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<Session | null>(null)
   const [profile, setProfile] = useState<UserProfile | null>(null)
   const [loading, setLoading] = useState(true)
+  const [hydrated, setHydrated] = useState(false)
 
   // Load user profile when user changes
   const loadUserProfile = async (userId: string) => {
@@ -42,7 +44,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }
 
+  // Handle hydration
   useEffect(() => {
+    setHydrated(true)
+  }, [])
+
+  useEffect(() => {
+    // Only initialize auth after hydration
+    if (!hydrated) return
+
     // Get initial session
     const getInitialSession = async () => {
       const { data: { session } } = await supabase.auth.getSession()
@@ -77,7 +87,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     })
 
     return () => subscription.unsubscribe()
-  }, [])
+  }, [hydrated])
 
   const signUp = async (email: string, password: string, displayName?: string) => {
     const { error } = await supabase.auth.signUp({
@@ -151,6 +161,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     session,
     profile,
     loading,
+    hydrated,
     signUp,
     signIn,
     signOut,

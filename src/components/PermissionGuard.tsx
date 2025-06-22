@@ -20,10 +20,10 @@ export default function PermissionGuard({
   fallback = null,
   requireAll = false,
 }: PermissionGuardProps) {
-  const { profile, hasPermission, loading } = useAuth()
+  const { profile, hasPermission, loading, hydrated } = useAuth()
 
-  // Show loading state if auth is still loading
-  if (loading) {
+  // Show loading state if auth is still loading or not hydrated
+  if (!hydrated || loading) {
     return <div className="animate-pulse bg-gray-200 h-4 w-full rounded"></div>
   }
 
@@ -85,6 +85,12 @@ export function AuthenticatedOnly({
   children: React.ReactNode
   fallback?: React.ReactNode 
 }) {
-  const { user } = useAuth()
+  const { user, hydrated } = useAuth()
+  
+  // Don't render anything until hydrated
+  if (!hydrated) {
+    return <div className="animate-pulse bg-gray-200 h-4 w-full rounded"></div>
+  }
+  
   return user ? <>{children}</> : <>{fallback}</>
 } 

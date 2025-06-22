@@ -242,29 +242,31 @@ export default function UserProfile() {
         </div>
       </div>
 
-      {/* Admin Panel Access */}
-      {isAdmin && (
-        <div className="bg-red-50 border border-red-200 rounded-lg p-6">
-          <h3 className="text-lg font-semibold text-red-900 mb-4">👑 Admin Panel</h3>
-          <p className="text-red-700 mb-4 text-sm">
-            Access administrative features to manage users, content, and platform settings.
+      {/* Content Management Access */}
+      {(isAdmin || isContentManager) && (
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-6">
+          <h3 className="text-lg font-semibold text-blue-900 mb-4">
+            {isAdmin ? '👑 Content Management' : '✏️ Content Management'}
+          </h3>
+          <p className="text-blue-700 mb-4 text-sm">
+            {isAdmin 
+              ? 'Manage all platform content, publish lessons, and oversee the learning experience.'
+              : 'Create and edit learning content. Contact an admin to publish your work.'
+            }
           </p>
-          <button className="bg-red-600 text-white px-4 py-2 rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 transition-colors">
-            Open Admin Panel
-          </button>
-        </div>
-      )}
-
-      {/* Content Manager Panel */}
-      {isContentManager && (
-        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-6">
-          <h3 className="text-lg font-semibold text-yellow-900 mb-4">✏️ Content Manager Panel</h3>
-          <p className="text-yellow-700 mb-4 text-sm">
-            Create and manage learning content for the platform.
-          </p>
-          <button className="bg-yellow-600 text-white px-4 py-2 rounded-md hover:bg-yellow-700 focus:outline-none focus:ring-2 focus:ring-yellow-500 transition-colors">
-            Manage Content
-          </button>
+          <div className="flex gap-3">
+            <button 
+              onClick={() => window.location.href = '/content'}
+              className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
+            >
+              Open Content Dashboard
+            </button>
+            {isAdmin && (
+              <button className="bg-red-600 text-white px-4 py-2 rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 transition-colors">
+                Admin Settings
+              </button>
+            )}
+          </div>
         </div>
       )}
 

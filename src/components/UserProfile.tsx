@@ -3,36 +3,88 @@
 import { useState } from 'react'
 import { useAuth } from '@/contexts/AuthContext'
 import RoleBadge from './RoleBadge'
-import { AdminOnly, ContentManagerOnly } from './PermissionGuard'
+// Permission guards available if needed
+// import { AdminOnly, ContentManagerOnly } from './PermissionGuard'
 import { ROLE_PERMISSIONS } from '@/types/auth'
+import { DatabaseService } from '@/lib/database'
 
 export default function UserProfile() {
-  const { user, profile, signOut, updateProfile, isAdmin, isContentManager } = useAuth()
+  const { user, userProfile, signOut, isRole } = useAuth()
   const [isEditing, setIsEditing] = useState(false)
-  const [displayName, setDisplayName] = useState(profile?.display_name || '')
-  const [bio, setBio] = useState(profile?.bio || '')
+  const [displayName, setDisplayName] = useState(userProfile?.display_name || '')
+  const [bio, setBio] = useState(userProfile?.bio || '')
   const [saving, setSaving] = useState(false)
 
+  // Component state logging only in development
+  if (process.env.NODE_ENV === 'development') {
+    console.log('UserProfile render - user:', user?.email || 'none', 'profile:', userProfile?.role || 'none')
+  }
+
   const handleSave = async () => {
-    setSaving(true)
-    const success = await updateProfile({
-      display_name: displayName,
-      bio: bio,
-    })
+    if (!user) {
+      return
+    }
     
-    if (success) {
-      setIsEditing(false)
+    setSaving(true)
+    try {
+      const updatedProfile = await DatabaseService.updateUserProfile(user.id, {
+        display_name: displayName,
+        bio: bio,
+      })
+      
+      if (updatedProfile) {
+        setIsEditing(false)
+      } else {
+        console.error('Failed to update profile')
+      }
+    } catch (error) {
+      console.error('Error updating profile:', error)
     }
     setSaving(false)
   }
 
   const handleSignOut = async () => {
-    await signOut()
+    try {
+      await signOut()
+    } catch (error) {
+      console.error('Error during sign out:', error)
+    }
   }
 
-  if (!user || !profile) return null
+  // Show loading if user exists but profile is still loading
+  if (user && !userProfile) {
+    return (
+      <div className="max-w-2xl mx-auto">
+        <div className="bg-white rounded-lg shadow-lg p-8 text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading your profile...</p>
+        </div>
+      </div>
+    )
+  }
 
-  const userPermissions = profile ? ROLE_PERMISSIONS[profile.role] : []
+  // Show error if no user or profile
+  if (!user || !userProfile) {
+    return (
+      <div className="max-w-2xl mx-auto">
+        <div className="bg-red-50 border border-red-200 rounded-lg p-8 text-center">
+          <p className="text-red-700">Unable to load user profile. Please try signing in again.</p>
+          <button
+            onClick={handleSignOut}
+            className="mt-4 bg-red-600 text-white px-4 py-2 rounded-md hover:bg-red-700"
+          >
+            Sign Out
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  const userPermissions = ROLE_PERMISSIONS[userProfile.role] || []
+  const isAdmin = isRole('admin')
+  const isContentManager = isRole('content_manager')
+
+  // Profile rendering complete
 
   return (
     <div className="max-w-2xl mx-auto space-y-6">
@@ -41,19 +93,19 @@ export default function UserProfile() {
         <div className="text-center mb-6">
           <div className="w-20 h-20 bg-gradient-to-br from-blue-100 to-indigo-200 rounded-full flex items-center justify-center mx-auto mb-4">
             <span className="text-3xl">
-              {profile.role === 'admin' ? '👑' : profile.role === 'content_manager' ? '✏️' : '🎓'}
+              {userProfile.role === 'admin' ? '👑' : userProfile.role === 'content_manager' ? '✏️' : '🎓'}
             </span>
           </div>
           
           <div className="flex items-center justify-center gap-3 mb-2">
             <h2 className="text-2xl font-bold text-gray-900">
-              {profile.display_name || 'Anonymous User'}
+              {userProfile.display_name || 'Anonymous User'}
             </h2>
-            <RoleBadge role={profile.role} />
+            <RoleBadge role={userProfile.role} />
           </div>
           
           <p className="text-gray-600">
-            {profile.bio || 'Learning to own the flow! 🌊'}
+            {userProfile.bio || 'Learning to own the flow! 🌊'}
           </p>
         </div>
 
@@ -98,8 +150,8 @@ export default function UserProfile() {
                 <button
                   onClick={() => {
                     setIsEditing(false)
-                    setDisplayName(profile.display_name || '')
-                    setBio(profile.bio || '')
+                    setDisplayName(userProfile.display_name || '')
+                    setBio(userProfile.bio || '')
                   }}
                   className="bg-gray-300 text-gray-700 px-4 py-2 rounded-md hover:bg-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-500 transition-colors"
                 >
@@ -143,7 +195,7 @@ export default function UserProfile() {
           <div className="bg-gray-50 rounded-lg p-4">
             <div className="text-sm text-gray-600 mb-1">Member Since</div>
             <div className="font-medium text-gray-900">
-              {new Date(profile.created_at).toLocaleDateString('en-US', {
+              {new Date(userProfile.created_at).toLocaleDateString('en-US', {
                 year: 'numeric',
                 month: 'long',
                 day: 'numeric'
@@ -170,19 +222,19 @@ export default function UserProfile() {
 
         {/* Role-specific messages */}
         <div className="mt-4 p-4 rounded-lg border-l-4 border-blue-400 bg-blue-50">
-          {isAdmin() && (
+          {isAdmin && (
             <p className="text-blue-800 text-sm">
               🔥 <strong>Administrator Access:</strong> You have full control over the platform, including user management and content publishing.
             </p>
           )}
           
-          {isContentManager() && !isAdmin() && (
+          {isContentManager && !isAdmin && (
             <p className="text-blue-800 text-sm">
               ✏️ <strong>Content Manager Access:</strong> You can create and edit learning content. Contact an admin to publish your work.
             </p>
           )}
           
-          {!isAdmin() && !isContentManager() && (
+          {!isAdmin && !isContentManager && (
             <p className="text-blue-800 text-sm">
               🎓 <strong>Learner Access:</strong> Enjoy unlimited access to all learning content. Ready to start your technical journey!
             </p>
@@ -191,7 +243,7 @@ export default function UserProfile() {
       </div>
 
       {/* Admin Panel Access */}
-      <AdminOnly>
+      {isAdmin && (
         <div className="bg-red-50 border border-red-200 rounded-lg p-6">
           <h3 className="text-lg font-semibold text-red-900 mb-4">👑 Admin Panel</h3>
           <p className="text-red-700 mb-4 text-sm">
@@ -201,26 +253,26 @@ export default function UserProfile() {
             Open Admin Panel
           </button>
         </div>
-      </AdminOnly>
+      )}
 
       {/* Content Manager Panel */}
-      <ContentManagerOnly>
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-6">
-          <h3 className="text-lg font-semibold text-blue-900 mb-4">✏️ Content Manager</h3>
-          <p className="text-blue-700 mb-4 text-sm">
-            Create and manage learning content, lessons, and course materials.
+      {isContentManager && (
+        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-6">
+          <h3 className="text-lg font-semibold text-yellow-900 mb-4">✏️ Content Manager Panel</h3>
+          <p className="text-yellow-700 mb-4 text-sm">
+            Create and manage learning content for the platform.
           </p>
-          <button className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors">
-            Content Dashboard
+          <button className="bg-yellow-600 text-white px-4 py-2 rounded-md hover:bg-yellow-700 focus:outline-none focus:ring-2 focus:ring-yellow-500 transition-colors">
+            Manage Content
           </button>
         </div>
-      </ContentManagerOnly>
+      )}
 
       {/* Sign Out */}
       <div className="text-center">
         <button
           onClick={handleSignOut}
-          className="bg-red-600 text-white py-2 px-6 rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 transition-colors"
+          className="bg-gray-600 text-white px-6 py-2 rounded-md hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-500 transition-colors"
         >
           Sign Out
         </button>

@@ -1,176 +1,270 @@
 'use client'
 
 import { createContext, useContext, useEffect, useState } from 'react'
-import { User, Session, AuthError } from '@supabase/supabase-js'
+import { User } from '@supabase/supabase-js'
 import { supabase } from '@/lib/supabase'
 import { DatabaseService } from '@/lib/database'
-import type { UserProfile, UserRole, Resource, Action } from '@/types/auth'
+import type { UserProfile, Resource, Action } from '@/types/auth'
 import { hasPermission } from '@/types/auth'
 
 interface AuthContextType {
   user: User | null
-  session: Session | null
-  profile: UserProfile | null
+  userProfile: UserProfile | null
   loading: boolean
   hydrated: boolean
-  signUp: (email: string, password: string, displayName?: string) => Promise<{ error: AuthError | null }>
-  signIn: (email: string, password: string) => Promise<{ error: AuthError | null }>
-  signOut: () => Promise<{ error: AuthError | null }>
-  updateProfile: (updates: Partial<Pick<UserProfile, 'display_name' | 'avatar_url' | 'bio'>>) => Promise<boolean>
-  hasPermission: (resource: Resource, action: Action) => boolean
-  isAdmin: () => boolean
-  isContentManager: () => boolean
-  isUser: () => boolean
-  refreshProfile: () => Promise<void>
+  signUp: (_email: string, _password: string, _fullName: string) => Promise<{ data?: any; error?: any }>
+  signIn: (_email: string, _password: string) => Promise<{ data?: any; error?: any }>
+  signOut: () => Promise<void>
+  resendConfirmation: (_email: string) => Promise<{ data?: any; error?: any }>
+  hasPermission: (_resource: Resource, _action: Action) => boolean
+  isRole: (_role: string) => boolean
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
-  const [session, setSession] = useState<Session | null>(null)
-  const [profile, setProfile] = useState<UserProfile | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [hydrated, setHydrated] = useState(false)
-
-  // Load user profile when user changes
-  const loadUserProfile = async (userId: string) => {
-    try {
-      const userProfile = await DatabaseService.getUserProfile(userId)
-      setProfile(userProfile)
-    } catch (error) {
-      console.error('Error loading user profile:', error)
-      setProfile(null)
-    }
-  }
-
-  // Handle hydration
+  const [userProfile, setUserProfile] = useState<UserProfile | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [hydrated, setHydrated] = useState(false) // Start as not hydrated to prevent SSR issues
+  
+  // Initialize auth state on mount
   useEffect(() => {
-    setHydrated(true)
+    let mounted = true
+    
+    const initializeAuth = async () => {
+      try {
+        if (process.env.NODE_ENV === 'development') {
+          console.log('AuthContext: Starting initialization...', { supabase: !!supabase, auth: !!supabase?.auth })
+        }
+        
+        if (!supabase?.auth) {
+          if (process.env.NODE_ENV === 'development') {
+            console.warn('Supabase not available - skipping auth initialization')
+          }
+          if (mounted) {
+            setHydrated(true)
+          }
+          return
+        }
+
+        // Get current session
+        const { data: { session } } = await supabase.auth.getSession()
+        
+        if (mounted && session?.user) {
+          setUser(session.user)
+          // Load user profile
+          try {
+            const profile = await DatabaseService.getUserProfile(session.user.id)
+            if (profile) {
+              setUserProfile(profile)
+            }
+          } catch (profileError) {
+            console.error('Error loading user profile:', profileError)
+          }
+        }
+      } catch (error) {
+        console.error('Auth initialization error:', error)
+      } finally {
+        if (mounted) {
+          setHydrated(true)
+        }
+      }
+    }
+
+    initializeAuth()
+    
+    return () => {
+      mounted = false
+    }
   }, [])
 
+  // Set up auth state listener
   useEffect(() => {
-    // Only initialize auth after hydration
-    if (!hydrated) return
-
-    // Get initial session
-    const getInitialSession = async () => {
-      const { data: { session } } = await supabase.auth.getSession()
-      setSession(session)
-      const currentUser = session?.user ?? null
-      setUser(currentUser)
-      
-      if (currentUser) {
-        await loadUserProfile(currentUser.id)
-      }
-      
-      setLoading(false)
+    if (!supabase?.auth) {
+      return
     }
 
-    getInitialSession()
-
-    // Listen for auth changes
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (event, session) => {
-      setSession(session)
-      const currentUser = session?.user ?? null
-      setUser(currentUser)
-      
-      if (currentUser) {
-        await loadUserProfile(currentUser.id)
-      } else {
-        setProfile(null)
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (event: any, session: any) => {
+        console.log('AuthContext: Auth state change:', { event, hasUser: !!session?.user, email: session?.user?.email })
+        
+        if (session?.user) {
+          setUser(session.user)
+          
+          // Load user profile with delay for database trigger
+          setTimeout(async () => {
+            try {
+              const profile = await DatabaseService.getUserProfile(session.user.id)
+              setUserProfile(profile)
+              console.log('AuthContext: User profile loaded:', { hasProfile: !!profile, role: profile?.role })
+            } catch (error) {
+              console.error('Error loading user profile:', error)
+            }
+          }, 1000)
+        } else {
+          setUser(null)
+          setUserProfile(null)
+        }
       }
-      
-      setLoading(false)
-    })
+    )
 
-    return () => subscription.unsubscribe()
-  }, [hydrated])
+    return () => {
+      subscription?.unsubscribe()
+    }
+  }, [])
 
-  const signUp = async (email: string, password: string, displayName?: string) => {
-    const { error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        data: {
-          display_name: displayName || email.split('@')[0],
+  const signUp = async (email: string, password: string, fullName: string) => {
+    setLoading(true)
+    try {
+      if (!supabase?.auth) {
+        console.error('AuthContext: Supabase auth not available')
+        return { error: { message: 'Authentication service not available' } }
+      }
+
+      console.log('AuthContext: Starting signup for:', email)
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: {
+            full_name: fullName,
+            display_name: fullName
+          },
         },
-      },
-    })
-    return { error }
+      })
+
+      console.log('AuthContext: Signup response:', { 
+        hasData: !!data, 
+        hasUser: !!data?.user, 
+        hasSession: !!data?.session,
+        hasError: !!error, 
+        error: error?.message 
+      })
+
+      if (error) {
+        console.error('AuthContext: Signup error:', error.message)
+        return { error }
+      }
+
+      console.log('AuthContext: Signup successful!')
+      return { data }
+    } catch (error: any) {
+      console.error('AuthContext: Signup exception:', error)
+      return { error: { message: error?.message || 'Unknown signup error' } }
+    } finally {
+      setLoading(false)
+    }
   }
 
   const signIn = async (email: string, password: string) => {
-    const { error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    })
-    return { error }
-  }
-
-  const signOut = async () => {
-    const { error } = await supabase.auth.signOut()
-    return { error }
-  }
-
-  const updateProfile = async (
-    updates: Partial<Pick<UserProfile, 'display_name' | 'avatar_url' | 'bio'>>
-  ): Promise<boolean> => {
-    if (!user) return false
-
+    setLoading(true)
     try {
-      const updatedProfile = await DatabaseService.updateUserProfile(user.id, updates)
-      if (updatedProfile) {
-        setProfile(updatedProfile)
-        return true
+      if (!supabase?.auth) {
+        return { error: { message: 'Authentication service not available' } }
       }
-      return false
-    } catch (error) {
-      console.error('Error updating profile:', error)
-      return false
+
+      console.log('AuthContext: Attempting sign in for:', email)
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      })
+
+      if (error) {
+        console.error('AuthContext: Sign in error:', error.message)
+        return { error }
+      }
+
+      console.log('AuthContext: Sign in successful:', { hasUser: !!data?.user, hasSession: !!data?.session })
+      return { data }
+    } catch (error: any) {
+      console.error('Signin exception:', error)
+      return { error: { message: error?.message || 'Unknown signin error' } }
+    } finally {
+      setLoading(false)
     }
   }
 
-  const refreshProfile = async () => {
-    if (!user) return
-    await loadUserProfile(user.id)
+  const signOut = async () => {
+    try {
+      if (supabase?.auth) {
+        const { error } = await supabase.auth.signOut()
+        if (error) {
+          console.error('Supabase signOut error:', error.message)
+        }
+      }
+      
+      // Always clear local state
+      setUser(null)
+      setUserProfile(null)
+    } catch (error) {
+      console.error('Exception during signOut:', error)
+      // Still clear local state
+      setUser(null)
+      setUserProfile(null)
+    }
   }
 
-  // Permission checking functions
+  const resendConfirmation = async (email: string) => {
+    setLoading(true)
+    try {
+      if (!supabase?.auth) {
+        console.error('AuthContext: Supabase auth not available')
+        return { error: { message: 'Authentication service not available' } }
+      }
+
+      console.log('AuthContext: Resending confirmation email to:', email)
+      const { data, error } = await supabase.auth.resend({
+        type: 'signup',
+        email: email,
+      })
+
+      console.log('AuthContext: Resend confirmation response:', { 
+        hasData: !!data,
+        hasError: !!error, 
+        error: error?.message 
+      })
+
+      if (error) {
+        console.error('AuthContext: Resend confirmation error:', error.message)
+        return { error }
+      }
+
+      console.log('AuthContext: Confirmation email resent successfully!')
+      return { data }
+    } catch (error: any) {
+      console.error('AuthContext: Resend confirmation exception:', error)
+      return { error: { message: error?.message || 'Unknown resend error' } }
+    } finally {
+      setLoading(false)
+    }
+  }
+
   const checkPermission = (resource: Resource, action: Action): boolean => {
-    if (!profile) return false
-    return hasPermission(profile.role, resource, action)
+    if (!hydrated || !userProfile) {
+      return false
+    }
+    return hasPermission(userProfile.role, resource, action)
   }
 
-  const isAdmin = (): boolean => {
-    return profile?.role === 'admin'
-  }
-
-  const isContentManager = (): boolean => {
-    return profile?.role === 'content_manager'
-  }
-
-  const isUser = (): boolean => {
-    return profile?.role === 'user'
+  const isRole = (role: string): boolean => {
+    if (!hydrated || !userProfile) {
+      return false
+    }
+    return userProfile.role === role
   }
 
   const value = {
     user,
-    session,
-    profile,
+    userProfile,
     loading,
     hydrated,
     signUp,
     signIn,
     signOut,
-    updateProfile,
+    resendConfirmation,
     hasPermission: checkPermission,
-    isAdmin,
-    isContentManager,
-    isUser,
-    refreshProfile,
+    isRole,
   }
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

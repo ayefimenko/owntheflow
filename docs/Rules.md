@@ -31,6 +31,15 @@
 - You are careful to only make changes that are requested or you are confident are well understood and related to the change being requested
 - When fixing an issue or bug, do not introduce a new pattern or technology without first exhausting all options for the existing implementation. And if you finally do this, make sure to remove the old implementation afterwards so we don't have duplicate logic
 
+## 🚨 Critical Bugfixing Rules
+
+- **NEVER simplify or remove working functionality during bugfixing** - This destroys product value and user experience
+- **Focus on the root cause** - Fix the actual issue rather than removing features that depend on the broken code
+- **Preserve all existing logic and features** - Authentication, user profiles, role-based access, and other core functionality must remain intact
+- **Debug systematically** - Use proper debugging techniques (checking logs, testing imports, clearing caches) rather than removing code
+- **When in doubt, ask for clarification** - Don't assume it's okay to remove features to "fix" an issue
+- **Maintain backwards compatibility** - Existing functionality should continue to work after the fix
+
 ## 🏗️ Code Organization & Quality
 
 - Keep the codebase very clean and organized
@@ -87,4 +96,5 @@
 8. **Never mock data** in dev/prod environments
 9. **Consider cross-environment compatibility** (dev, test, prod)
 10. **Think about impact** on other parts of the codebase when making changes
-11. **Use correct git configuration** (`ayefimenko1337@gmail.com`) for proper contribution tracking 
+11. **Use correct git configuration** (`ayefimenko1337@gmail.com`) for proper contribution tracking
+12. **🚨 CRITICAL: Never simplify or remove working functionality during bugfixing** - Always preserve product features and user experience 

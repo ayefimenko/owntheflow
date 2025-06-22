@@ -9,18 +9,18 @@ interface PermissionGuardProps {
   action?: Action
   role?: UserRole | UserRole[]
   fallback?: React.ReactNode
-  requireAll?: boolean // If true, user must have ALL specified permissions
+  _requireAll?: boolean // If true, user must have ALL specified permissions (unused for now)
 }
 
-export default function PermissionGuard({
+function PermissionGuard({
   children,
   resource,
   action,
   role,
   fallback = null,
-  requireAll = false,
+  _requireAll = false,
 }: PermissionGuardProps) {
-  const { profile, hasPermission, loading, hydrated } = useAuth()
+  const { userProfile, hasPermission, loading, hydrated } = useAuth()
 
   // Show loading state if auth is still loading or not hydrated
   if (!hydrated || loading) {
@@ -28,7 +28,7 @@ export default function PermissionGuard({
   }
 
   // If no profile, user is not authenticated
-  if (!profile) {
+  if (!userProfile) {
     return <>{fallback}</>
   }
 
@@ -37,7 +37,7 @@ export default function PermissionGuard({
   // Check role-based authorization
   if (role) {
     const allowedRoles = Array.isArray(role) ? role : [role]
-    isAuthorized = allowedRoles.includes(profile.role)
+    isAuthorized = allowedRoles.includes(userProfile.role)
   }
 
   // Check permission-based authorization
@@ -49,14 +49,8 @@ export default function PermissionGuard({
   return isAuthorized ? <>{children}</> : <>{fallback}</>
 }
 
-// Convenience components for common use cases
-export function AdminOnly({ 
-  children, 
-  fallback = null 
-}: { 
-  children: React.ReactNode
-  fallback?: React.ReactNode 
-}) {
+// Convenience components for common permission patterns
+export function AdminOnly({ children, fallback = null }: { children: React.ReactNode; fallback?: React.ReactNode }) {
   return (
     <PermissionGuard role="admin" fallback={fallback}>
       {children}
@@ -64,33 +58,20 @@ export function AdminOnly({
   )
 }
 
-export function ContentManagerOnly({ 
-  children, 
-  fallback = null 
-}: { 
-  children: React.ReactNode
-  fallback?: React.ReactNode 
-}) {
+export function ContentManagerOnly({ children, fallback = null }: { children: React.ReactNode; fallback?: React.ReactNode }) {
   return (
-    <PermissionGuard role={['admin', 'content_manager']} fallback={fallback}>
+    <PermissionGuard role="content_manager" fallback={fallback}>
       {children}
     </PermissionGuard>
   )
 }
 
-export function AuthenticatedOnly({ 
-  children, 
-  fallback = null 
-}: { 
-  children: React.ReactNode
-  fallback?: React.ReactNode 
-}) {
-  const { user, hydrated } = useAuth()
-  
-  // Don't render anything until hydrated
-  if (!hydrated) {
-    return <div className="animate-pulse bg-gray-200 h-4 w-full rounded"></div>
-  }
-  
-  return user ? <>{children}</> : <>{fallback}</>
-} 
+export function AuthenticatedOnly({ children, fallback = null }: { children: React.ReactNode; fallback?: React.ReactNode }) {
+  return (
+    <PermissionGuard role={['admin', 'content_manager', 'user']} fallback={fallback}>
+      {children}
+    </PermissionGuard>
+  )
+}
+
+export default PermissionGuard 

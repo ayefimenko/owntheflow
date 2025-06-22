@@ -318,6 +318,11 @@ export class ContentService {
         return fallbackResult
       }
 
+      // Cascade status changes to child content if status changed to draft or archived
+      if (data.status && (data.status === 'draft' || data.status === 'archived')) {
+        await ContentService.cascadeStatusFromLearningPath(id, data.status)
+      }
+
       // Clear relevant cache entries
       clearCache('learning_paths')
       clearCache(`learning_path_${id}`)
@@ -539,6 +544,11 @@ export class ContentService {
         return fallbackResult
       }
 
+      // Cascade status changes to child content if status changed to draft or archived
+      if (data.status && (data.status === 'draft' || data.status === 'archived')) {
+        await ContentService.cascadeStatusFromCourse(id, data.status)
+      }
+
       // Clear relevant cache entries
       clearCache('courses')
       clearCache(`course_${id}`)
@@ -757,6 +767,11 @@ export class ContentService {
 
       // Return the first result if we got an array
       const updatedModule = Array.isArray(result) ? result[0] : result
+
+      // Cascade status changes to child content if status changed to draft or archived
+      if (data.status && (data.status === 'draft' || data.status === 'archived')) {
+        await ContentService.cascadeStatusFromModule(id, data.status)
+      }
 
       // Clear relevant cache entries
       clearCache('modules')
@@ -997,6 +1012,11 @@ export class ContentService {
 
       // Return the first result if we got an array
       const updatedLesson = Array.isArray(result) ? result[0] : result
+
+      // Cascade status changes to child content if status changed to draft or archived
+      if (data.status && (data.status === 'draft' || data.status === 'archived')) {
+        await ContentService.cascadeStatusFromLesson(id, data.status)
+      }
 
       // Clear relevant cache entries
       clearCache('lessons')
@@ -1538,6 +1558,260 @@ export class ContentService {
     return {
       size: cache.size,
       keys: Array.from(cache.keys())
+    }
+  }
+
+  // ============================================================================
+  // CASCADE STATUS CHANGE FUNCTIONS
+  // ============================================================================
+
+  /**
+   * Cascades status changes from a learning path to all its child content
+   * When a learning path is set to draft/archived, all courses, modules, lessons, and challenges follow
+   */
+  static async cascadeStatusFromLearningPath(pathId: string, newStatus: 'draft' | 'archived'): Promise<void> {
+    try {
+      if (!validateSupabase()) return
+
+      const user = await supabase.auth.getUser()
+      if (!user.data.user?.id) {
+        throw new Error('User not authenticated')
+      }
+
+      const updateData = {
+        status: newStatus,
+        updated_by: user.data.user.id,
+        updated_at: new Date().toISOString()
+      }
+
+      // Update all courses in this learning path
+      const { error: coursesError } = await supabase
+        .from('courses')
+        .update(updateData)
+        .eq('path_id', pathId)
+
+      if (coursesError) {
+        console.error('Error cascading status to courses:', coursesError)
+        throw new Error(`Failed to cascade status to courses: ${coursesError.message}`)
+      }
+
+      // Update all modules in courses of this learning path
+      const { error: modulesError } = await supabase
+        .from('modules')
+        .update(updateData)
+        .in('course_id', 
+          supabase.from('courses').select('id').eq('path_id', pathId)
+        )
+
+      if (modulesError) {
+        console.error('Error cascading status to modules:', modulesError)
+        throw new Error(`Failed to cascade status to modules: ${modulesError.message}`)
+      }
+
+      // Update all lessons in modules of courses in this learning path
+      const { error: lessonsError } = await supabase
+        .from('lessons')
+        .update(updateData)
+        .in('module_id',
+          supabase
+            .from('modules')
+            .select('id')
+            .in('course_id', 
+              supabase.from('courses').select('id').eq('path_id', pathId)
+            )
+        )
+
+      if (lessonsError) {
+        console.error('Error cascading status to lessons:', lessonsError)
+        throw new Error(`Failed to cascade status to lessons: ${lessonsError.message}`)
+      }
+
+      // Update all challenges in lessons of modules of courses in this learning path
+      const { error: challengesError } = await supabase
+        .from('challenges')
+        .update(updateData)
+        .in('lesson_id',
+          supabase
+            .from('lessons')
+            .select('id')
+            .in('module_id',
+              supabase
+                .from('modules')
+                .select('id')
+                .in('course_id', 
+                  supabase.from('courses').select('id').eq('path_id', pathId)
+                )
+            )
+        )
+
+      if (challengesError) {
+        console.error('Error cascading status to challenges:', challengesError)
+        throw new Error(`Failed to cascade status to challenges: ${challengesError.message}`)
+      }
+
+      console.log(`✅ Successfully cascaded status '${newStatus}' from learning path ${pathId} to all child content`)
+
+    } catch (error) {
+      console.error('Error in cascadeStatusFromLearningPath:', error)
+      throw error
+    }
+  }
+
+  /**
+   * Cascades status changes from a course to all its child content
+   * When a course is set to draft/archived, all modules, lessons, and challenges follow
+   */
+  static async cascadeStatusFromCourse(courseId: string, newStatus: 'draft' | 'archived'): Promise<void> {
+    try {
+      if (!validateSupabase()) return
+
+      const user = await supabase.auth.getUser()
+      if (!user.data.user?.id) {
+        throw new Error('User not authenticated')
+      }
+
+      const updateData = {
+        status: newStatus,
+        updated_by: user.data.user.id,
+        updated_at: new Date().toISOString()
+      }
+
+      // Update all modules in this course
+      const { error: modulesError } = await supabase
+        .from('modules')
+        .update(updateData)
+        .eq('course_id', courseId)
+
+      if (modulesError) {
+        console.error('Error cascading status to modules:', modulesError)
+        throw new Error(`Failed to cascade status to modules: ${modulesError.message}`)
+      }
+
+      // Update all lessons in modules of this course
+      const { error: lessonsError } = await supabase
+        .from('lessons')
+        .update(updateData)
+        .in('module_id',
+          supabase.from('modules').select('id').eq('course_id', courseId)
+        )
+
+      if (lessonsError) {
+        console.error('Error cascading status to lessons:', lessonsError)
+        throw new Error(`Failed to cascade status to lessons: ${lessonsError.message}`)
+      }
+
+      // Update all challenges in lessons of modules of this course
+      const { error: challengesError } = await supabase
+        .from('challenges')
+        .update(updateData)
+        .in('lesson_id',
+          supabase
+            .from('lessons')
+            .select('id')
+            .in('module_id',
+              supabase.from('modules').select('id').eq('course_id', courseId)
+            )
+        )
+
+      if (challengesError) {
+        console.error('Error cascading status to challenges:', challengesError)
+        throw new Error(`Failed to cascade status to challenges: ${challengesError.message}`)
+      }
+
+      console.log(`✅ Successfully cascaded status '${newStatus}' from course ${courseId} to all child content`)
+
+    } catch (error) {
+      console.error('Error in cascadeStatusFromCourse:', error)
+      throw error
+    }
+  }
+
+  /**
+   * Cascades status changes from a module to all its child content
+   * When a module is set to draft/archived, all lessons and challenges follow
+   */
+  static async cascadeStatusFromModule(moduleId: string, newStatus: 'draft' | 'archived'): Promise<void> {
+    try {
+      if (!validateSupabase()) return
+
+      const user = await supabase.auth.getUser()
+      if (!user.data.user?.id) {
+        throw new Error('User not authenticated')
+      }
+
+      const updateData = {
+        status: newStatus,
+        updated_by: user.data.user.id,
+        updated_at: new Date().toISOString()
+      }
+
+      // Update all lessons in this module
+      const { error: lessonsError } = await supabase
+        .from('lessons')
+        .update(updateData)
+        .eq('module_id', moduleId)
+
+      if (lessonsError) {
+        console.error('Error cascading status to lessons:', lessonsError)
+        throw new Error(`Failed to cascade status to lessons: ${lessonsError.message}`)
+      }
+
+      // Update all challenges in lessons of this module
+      const { error: challengesError } = await supabase
+        .from('challenges')
+        .update(updateData)
+        .in('lesson_id',
+          supabase.from('lessons').select('id').eq('module_id', moduleId)
+        )
+
+      if (challengesError) {
+        console.error('Error cascading status to challenges:', challengesError)
+        throw new Error(`Failed to cascade status to challenges: ${challengesError.message}`)
+      }
+
+      console.log(`✅ Successfully cascaded status '${newStatus}' from module ${moduleId} to all child content`)
+
+    } catch (error) {
+      console.error('Error in cascadeStatusFromModule:', error)
+      throw error
+    }
+  }
+
+  /**
+   * Cascades status changes from a lesson to all its child content
+   * When a lesson is set to draft/archived, all challenges follow
+   */
+  static async cascadeStatusFromLesson(lessonId: string, newStatus: 'draft' | 'archived'): Promise<void> {
+    try {
+      if (!validateSupabase()) return
+
+      const user = await supabase.auth.getUser()
+      if (!user.data.user?.id) {
+        throw new Error('User not authenticated')
+      }
+
+      const updateData = {
+        status: newStatus,
+        updated_by: user.data.user.id,
+        updated_at: new Date().toISOString()
+      }
+
+      // Update all challenges in this lesson
+      const { error: challengesError } = await supabase
+        .from('challenges')
+        .update(updateData)
+        .eq('lesson_id', lessonId)
+
+      if (challengesError) {
+        console.error('Error cascading status to challenges:', challengesError)
+        throw new Error(`Failed to cascade status to challenges: ${challengesError.message}`)
+      }
+
+      console.log(`✅ Successfully cascaded status '${newStatus}' from lesson ${lessonId} to all child content`)
+
+    } catch (error) {
+      console.error('Error in cascadeStatusFromLesson:', error)
+      throw error
     }
   }
 } 

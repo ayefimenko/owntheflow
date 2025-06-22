@@ -11,6 +11,7 @@ import CourseForm from './CourseForm'
 import ModuleForm from './ModuleForm'
 import LessonForm from './LessonForm'
 import ChallengeForm from './ChallengeForm'
+import CurriculumBuilder from './CurriculumBuilder'
 import type { LearningPath, Course, Module, Lesson, Challenge, ContentStats } from '@/types/content'
 
 // Component that allows both admin and content_manager - now properly handles client-side logic
@@ -43,7 +44,7 @@ export default function ContentDashboard() {
   const [challenges, setChallenges] = useState<Challenge[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [activeTab, setActiveTab] = useState<'overview' | 'paths' | 'courses' | 'modules' | 'lessons' | 'challenges'>('overview')
+  const [activeTab, setActiveTab] = useState<'overview' | 'paths' | 'courses' | 'modules' | 'lessons' | 'challenges' | 'curriculum'>('overview')
   
   // Modal states
   const [showPathModal, setShowPathModal] = useState(false)
@@ -306,6 +307,7 @@ export default function ContentDashboard() {
             <nav className="-mb-px flex space-x-8 px-6" aria-label="Tabs">
               {[
                 { id: 'overview', name: 'Overview', icon: '📊' },
+                { id: 'curriculum', name: 'Curriculum Builder', icon: '🏗️' },
                 { id: 'paths', name: 'Learning Paths', icon: '🛤️' },
                 { id: 'courses', name: 'Courses', icon: '📚' },
                 { id: 'modules', name: 'Modules', icon: '📋' },
@@ -335,6 +337,17 @@ export default function ContentDashboard() {
         {/* Tab Content */}
         {activeTab === 'overview' && (
           <OverviewTab stats={stats} paths={paths} onCreatePath={handleCreatePath} />
+        )}
+
+        {activeTab === 'curriculum' && (
+          <CurriculumBuilder 
+            onRefresh={loadDashboardData}
+            onEditPath={handleEditPath}
+            onEditCourse={handleEditCourse}
+            onEditModule={handleEditModule}
+            onEditLesson={handleEditLesson}
+            onEditChallenge={handleEditChallenge}
+          />
         )}
 
         {activeTab === 'paths' && (

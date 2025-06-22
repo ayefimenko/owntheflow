@@ -474,21 +474,11 @@ export default function CurriculumBuilder({
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-xl font-semibold text-gray-900">Curriculum Builder</h2>
-          <p className="text-sm text-gray-600">
-            Drag and drop to reorganize your learning content hierarchy
-          </p>
-        </div>
-        <button
-          onClick={loadCurriculumData}
-          className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 flex items-center gap-2"
-          type="button"
-        >
-          <span>🔄</span>
-          Refresh
-        </button>
+      <div>
+        <h2 className="text-xl font-semibold text-gray-900">Curriculum Builder</h2>
+        <p className="text-sm text-gray-600">
+          Drag and drop to reorganize your learning content hierarchy
+        </p>
       </div>
 
       {/* Instructions */}

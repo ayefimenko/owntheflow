@@ -80,6 +80,25 @@ export default function LessonForm({ lesson, moduleId, onSave, onCancel }: Lesso
     setError(null)
 
     try {
+      // Validate required fields
+      if (!formData.module_id) {
+        setError('Please select a module')
+        setLoading(false)
+        return
+      }
+
+      if (!formData.title.trim()) {
+        setError('Please enter a lesson title')
+        setLoading(false)
+        return
+      }
+
+      if (!formData.slug.trim()) {
+        setError('Please enter a lesson slug')
+        setLoading(false)
+        return
+      }
+
       let result: Lesson | null = null
 
       if (lesson) {
@@ -216,16 +235,32 @@ export default function LessonForm({ lesson, moduleId, onSave, onCancel }: Lesso
                 value={formData.module_id}
                 onChange={handleInputChange}
                 required
-                disabled={!!moduleId}
-                className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-gray-900"
+                disabled={!!moduleId || modules.length === 0}
+                className={`mt-1 block w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none text-gray-900 ${
+                  !formData.module_id && error 
+                    ? 'border-red-300 focus:ring-red-500 focus:border-red-500' 
+                    : 'border-gray-300 focus:ring-blue-500 focus:border-blue-500'
+                }`}
               >
-                <option value="">Select a module</option>
+                <option value="">
+                  {modules.length === 0 ? 'No modules available' : 'Select a module'}
+                </option>
                 {modules.map(module => (
                   <option key={module.id} value={module.id}>
                     {module.title}
                   </option>
                 ))}
               </select>
+              {modules.length === 0 && (
+                <p className="mt-1 text-sm text-amber-600">
+                  Please create a module first before adding lessons.
+                </p>
+              )}
+              {!formData.module_id && error && (
+                <p className="mt-1 text-sm text-red-600">
+                  Please select a module for this lesson.
+                </p>
+              )}
             </div>
 
             {/* Lesson Type */}

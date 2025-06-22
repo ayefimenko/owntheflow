@@ -618,6 +618,19 @@ export class ContentService {
         throw new Error('User not authenticated')
       }
 
+      // Validate required fields
+      if (!data.module_id || data.module_id.trim() === '') {
+        throw new Error('Module ID is required')
+      }
+
+      if (!data.title || data.title.trim() === '') {
+        throw new Error('Title is required')
+      }
+
+      if (!data.slug || data.slug.trim() === '') {
+        throw new Error('Slug is required')
+      }
+
       const { data: result, error } = await supabase
         .from('lessons')
         .insert({
@@ -650,6 +663,19 @@ export class ContentService {
       const user = await supabase.auth.getUser()
       if (!user.data.user?.id) {
         throw new Error('User not authenticated')
+      }
+
+      // Validate required fields if they are being updated
+      if (data.module_id !== undefined && (!data.module_id || data.module_id.trim() === '')) {
+        throw new Error('Module ID is required')
+      }
+
+      if (data.title !== undefined && (!data.title || data.title.trim() === '')) {
+        throw new Error('Title is required')
+      }
+
+      if (data.slug !== undefined && (!data.slug || data.slug.trim() === '')) {
+        throw new Error('Slug is required')
       }
 
       const { data: result, error } = await supabase

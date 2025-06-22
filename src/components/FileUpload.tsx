@@ -190,6 +190,7 @@ export default function FileUpload({
                   handleClick()
                 }}
                 className="text-sm text-blue-600 hover:text-blue-700"
+                type="button"
               >
                 Replace
               </button>
@@ -200,6 +201,7 @@ export default function FileUpload({
                     handleRemove()
                   }}
                   className="text-sm text-red-600 hover:text-red-700"
+                  type="button"
                 >
                   Remove
                 </button>

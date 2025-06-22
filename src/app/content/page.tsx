@@ -18,6 +18,7 @@ export default function ContentPage() {
                 <button
                   onClick={() => window.location.href = '/'}
                   className="block bg-blue-600 text-white px-6 py-3 rounded-md hover:bg-blue-700 transition-colors"
+                  type="button"
                 >
                   Back to Home
                 </button>

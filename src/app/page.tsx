@@ -147,6 +147,7 @@ export default function Home() {
               <button
                 onClick={handleBackToAuth}
                 className="w-full bg-blue-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-blue-700 transition-colors"
+                type="button"
               >
                 Back to Sign In
               </button>
@@ -157,6 +158,7 @@ export default function Home() {
                   setShowAuth(false)
                 }}
                 className="w-full text-gray-600 px-6 py-3 rounded-lg font-semibold hover:bg-gray-50 transition-colors"
+                type="button"
               >
                 Back to Home
               </button>
@@ -203,6 +205,7 @@ export default function Home() {
                 onClick={handleResendConfirmation}
                 disabled={resendingEmail}
                 className="w-full bg-green-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                type="button"
               >
                 {resendingEmail ? 'Sending...' : 'Resend Confirmation Email'}
               </button>
@@ -210,6 +213,7 @@ export default function Home() {
               <button
                 onClick={handleBackToAuth}
                 className="w-full bg-blue-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-blue-700 transition-colors"
+                type="button"
               >
                 Back to Sign In
               </button>
@@ -220,6 +224,7 @@ export default function Home() {
                   setShowAuth(false)
                 }}
                 className="w-full text-gray-600 px-6 py-3 rounded-lg font-semibold hover:bg-gray-50 transition-colors"
+                type="button"
               >
                 Back to Home
               </button>
@@ -255,6 +260,7 @@ export default function Home() {
                   setShowAuth(true)
                 }}
                 className="bg-blue-600 text-white px-8 py-3 rounded-lg text-lg font-semibold hover:bg-blue-700 transition-colors"
+                type="button"
               >
                 Get Started
               </button>
@@ -264,6 +270,7 @@ export default function Home() {
                   setShowAuth(true)
                 }}
                 className="bg-white text-blue-600 px-8 py-3 rounded-lg text-lg font-semibold border-2 border-blue-600 hover:bg-blue-50 transition-colors"
+                type="button"
               >
                 Sign In
               </button>
@@ -311,6 +318,7 @@ export default function Home() {
                 setShowAuth(true)
               }}
               className="bg-blue-600 text-white px-8 py-3 rounded-lg text-lg font-semibold hover:bg-blue-700 transition-colors"
+              type="button"
             >
               Start Learning Today
             </button>

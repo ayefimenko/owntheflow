@@ -227,18 +227,95 @@ export class ContentService {
         throw new Error('User not authenticated')
       }
 
+      // Check if learning path exists first
+      const { data: existingPath, error: checkError } = await supabase
+        .from('learning_paths')
+        .select('*')
+        .eq('id', id)
+        .maybeSingle()
+
+      if (checkError) {
+        throw new Error(`Failed to verify learning path: ${checkError.message}`)
+      }
+
+      if (!existingPath) {
+        throw new Error('Learning path not found')
+      }
+
+      // Check for changes to avoid unnecessary updates
+      const hasChanges = Object.keys(data).some(key => {
+        return data[key as keyof UpdateLearningPathDto] !== existingPath[key as keyof typeof existingPath]
+      })
+
+      if (!hasChanges) {
+        console.log('No changes detected for learning path:', id)
+        return existingPath as LearningPath
+      }
+
+      // If slug is being changed, validate uniqueness
+      if (data.slug && data.slug !== existingPath.slug) {
+        const { data: duplicateCheck, error: duplicateError } = await supabase
+          .from('learning_paths')
+          .select('id')
+          .eq('slug', data.slug)
+          .neq('id', id)
+          .maybeSingle()
+
+        if (duplicateError) {
+          throw new Error(`Failed to check slug uniqueness: ${duplicateError.message}`)
+        }
+
+        if (duplicateCheck) {
+          throw new Error(`A learning path with slug "${data.slug}" already exists`)
+        }
+      }
+
+      // Prepare update data
+      const updateData: any = {
+        ...data,
+        updated_by: user.data.user.id
+      }
+
+      // If status is being changed to 'published', set published metadata
+      if (data.status === 'published') {
+        updateData.published_by = user.data.user.id
+        updateData.published_at = new Date().toISOString()
+      }
+
       const { data: result, error } = await supabase
         .from('learning_paths')
-        .update({
-          ...data,
-          updated_by: user.data.user.id
-        })
+        .update(updateData)
         .eq('id', id)
         .select()
-        .single()
+        .maybeSingle()
 
       if (error) {
         throw new Error(`Failed to update learning path: ${error.message}`)
+      }
+
+      if (!result) {
+        // If no result returned, fetch the current data as fallback
+        console.warn('Update returned no data, fetching current learning path data')
+        const { data: fallbackResult, error: fallbackError } = await supabase
+          .from('learning_paths')
+          .select('*')
+          .eq('id', id)
+          .maybeSingle()
+
+        if (fallbackError) {
+          throw new Error(`Failed to fetch updated learning path: ${fallbackError.message}`)
+        }
+
+        if (!fallbackResult) {
+          throw new Error('Learning path not found after update')
+        }
+
+        // Clear relevant cache entries
+        clearCache('learning_paths')
+        clearCache(`learning_path_${id}`)
+        clearCache('stats')
+
+        return fallbackResult
       }
 
       // Clear relevant cache entries
@@ -369,18 +446,97 @@ export class ContentService {
         throw new Error('User not authenticated')
       }
 
+      // Check if course exists first
+      const { data: existingCourse, error: checkError } = await supabase
+        .from('courses')
+        .select('*')
+        .eq('id', id)
+        .maybeSingle()
+
+      if (checkError) {
+        throw new Error(`Failed to verify course: ${checkError.message}`)
+      }
+
+      if (!existingCourse) {
+        throw new Error('Course not found')
+      }
+
+      // Check for changes to avoid unnecessary updates
+      const hasChanges = Object.keys(data).some(key => {
+        return data[key as keyof UpdateCourseDto] !== existingCourse[key as keyof typeof existingCourse]
+      })
+
+      if (!hasChanges) {
+        console.log('No changes detected for course:', id)
+        return existingCourse as Course
+      }
+
+      // If slug is being changed, validate uniqueness within the same learning path
+      if (data.slug && data.slug !== existingCourse.slug) {
+        const { data: duplicateCheck, error: duplicateError } = await supabase
+          .from('courses')
+          .select('id')
+          .eq('path_id', existingCourse.path_id)
+          .eq('slug', data.slug)
+          .neq('id', id)
+          .maybeSingle()
+
+        if (duplicateError) {
+          throw new Error(`Failed to check slug uniqueness: ${duplicateError.message}`)
+        }
+
+        if (duplicateCheck) {
+          throw new Error(`A course with slug "${data.slug}" already exists in this learning path`)
+        }
+      }
+
+      // Prepare update data
+      const updateData: any = {
+        ...data,
+        updated_by: user.data.user.id
+      }
+
+      // If status is being changed to 'published', set published metadata
+      if (data.status === 'published') {
+        updateData.published_by = user.data.user.id
+        updateData.published_at = new Date().toISOString()
+      }
+
       const { data: result, error } = await supabase
         .from('courses')
-        .update({
-          ...data,
-          updated_by: user.data.user.id
-        })
+        .update(updateData)
         .eq('id', id)
         .select()
-        .single()
+        .maybeSingle()
 
       if (error) {
         throw new Error(`Failed to update course: ${error.message}`)
+      }
+
+      if (!result) {
+        // If no result returned, fetch the current data as fallback
+        console.warn('Update returned no data, fetching current course data')
+        const { data: fallbackResult, error: fallbackError } = await supabase
+          .from('courses')
+          .select('*')
+          .eq('id', id)
+          .maybeSingle()
+
+        if (fallbackError) {
+          throw new Error(`Failed to fetch updated course: ${fallbackError.message}`)
+        }
+
+        if (!fallbackResult) {
+          throw new Error('Course not found after update')
+        }
+
+        // Clear relevant cache entries
+        clearCache('courses')
+        clearCache(`course_${id}`)
+        clearCache('learning_paths')
+        clearCache('stats')
+
+        return fallbackResult
       }
 
       // Clear relevant cache entries
@@ -507,24 +663,100 @@ export class ContentService {
     try {
       if (!validateSupabase()) return null
 
+      console.log(`Updating module ${id} with data:`, data)
+
       const user = await supabase.auth.getUser()
       if (!user.data.user?.id) {
         throw new Error('User not authenticated')
       }
 
+      // Check if there are any changes to apply
+      if (Object.keys(data).length === 0) {
+        throw new Error('No data provided for update')
+      }
+
+      // First, check if the module exists and get current data
+      const { data: existingModule, error: fetchError } = await supabase
+        .from('modules')
+        .select('*')
+        .eq('id', id)
+        .maybeSingle()
+
+      if (fetchError) {
+        throw new Error(`Error fetching module: ${fetchError.message}`)
+      }
+
+      if (!existingModule) {
+        throw new Error('Module not found')
+      }
+
+      // If updating slug, check for conflicts within the same course
+      if (data.slug && data.slug !== existingModule.slug) {
+        const courseId = data.course_id || existingModule.course_id
+        
+        const { data: conflictCheck, error: conflictError } = await supabase
+          .from('modules')
+          .select('id')
+          .eq('course_id', courseId)
+          .eq('slug', data.slug)
+          .neq('id', id)
+          .limit(1)
+
+        if (conflictError) {
+          throw new Error(`Error checking slug uniqueness: ${conflictError.message}`)
+        }
+        
+        if (conflictCheck && conflictCheck.length > 0) {
+          throw new Error(`A module with slug "${data.slug}" already exists in this course`)
+        }
+      }
+
+      // Prepare update data
+      const updateData: any = {
+        ...data,
+        updated_by: user.data.user.id
+      }
+
+      // If status is being changed to 'published', set published metadata
+      if (data.status === 'published') {
+        updateData.published_by = user.data.user.id
+        updateData.published_at = new Date().toISOString()
+      }
+
+      // Perform the update
       const { data: result, error } = await supabase
         .from('modules')
-        .update({
-          ...data,
-          updated_by: user.data.user.id
-        })
+        .update(updateData)
         .eq('id', id)
         .select()
-        .single()
 
       if (error) {
         throw new Error(`Failed to update module: ${error.message}`)
       }
+
+      // If no rows were returned, it could mean no changes were needed
+      // Let's fetch the current module to verify it exists and return it
+      if (!result || result.length === 0) {
+        const { data: currentModule, error: fetchError } = await supabase
+          .from('modules')
+          .select('*')
+          .eq('id', id)
+          .maybeSingle()
+
+        if (fetchError) {
+          throw new Error(`Failed to fetch module after update: ${fetchError.message}`)
+        }
+
+        if (!currentModule) {
+          throw new Error('Module not found')
+        }
+
+        // Return the current module data since no changes were made
+        return currentModule
+      }
+
+      // Return the first result if we got an array
+      const updatedModule = Array.isArray(result) ? result[0] : result
 
       // Clear relevant cache entries
       clearCache('modules')
@@ -532,7 +764,7 @@ export class ContentService {
       clearCache('courses')
       clearCache('stats')
 
-      return result
+      return updatedModule
     } catch (error) {
       handleError('updateModule', error)
       return null
@@ -678,19 +910,93 @@ export class ContentService {
         throw new Error('Slug is required')
       }
 
+      // Check if there are any changes to apply
+      if (Object.keys(data).length === 0) {
+        throw new Error('No data provided for update')
+      }
+
+      // First, check if the lesson exists and get current data
+      const { data: existingLesson, error: fetchError } = await supabase
+        .from('lessons')
+        .select('*')
+        .eq('id', id)
+        .maybeSingle()
+
+      if (fetchError) {
+        throw new Error(`Error fetching lesson: ${fetchError.message}`)
+      }
+
+      if (!existingLesson) {
+        throw new Error('Lesson not found')
+      }
+
+      // If updating slug, check for conflicts within the same module
+      if (data.slug && data.slug !== existingLesson.slug) {
+        const moduleId = data.module_id || existingLesson.module_id
+        
+        const { data: conflictCheck, error: conflictError } = await supabase
+          .from('lessons')
+          .select('id')
+          .eq('module_id', moduleId)
+          .eq('slug', data.slug)
+          .neq('id', id)
+          .limit(1)
+
+        if (conflictError) {
+          throw new Error(`Error checking slug uniqueness: ${conflictError.message}`)
+        }
+        
+        if (conflictCheck && conflictCheck.length > 0) {
+          throw new Error(`A lesson with slug "${data.slug}" already exists in this module`)
+        }
+      }
+
+      // Prepare update data
+      const updateData: any = {
+        ...data,
+        updated_by: user.data.user.id
+      }
+
+      // If status is being changed to 'published', set published metadata
+      if (data.status === 'published') {
+        updateData.published_by = user.data.user.id
+        updateData.published_at = new Date().toISOString()
+      }
+
+      // Perform the update
       const { data: result, error } = await supabase
         .from('lessons')
-        .update({
-          ...data,
-          updated_by: user.data.user.id
-        })
+        .update(updateData)
         .eq('id', id)
         .select()
-        .single()
 
       if (error) {
         throw new Error(`Failed to update lesson: ${error.message}`)
       }
+
+      // If no rows were returned, it could mean no changes were needed
+      // Let's fetch the current lesson to verify it exists and return it
+      if (!result || result.length === 0) {
+        const { data: currentLesson, error: fetchError } = await supabase
+          .from('lessons')
+          .select('*')
+          .eq('id', id)
+          .maybeSingle()
+
+        if (fetchError) {
+          throw new Error(`Failed to fetch lesson after update: ${fetchError.message}`)
+        }
+
+        if (!currentLesson) {
+          throw new Error('Lesson not found')
+        }
+
+        // Return the current lesson data since no changes were made
+        return currentLesson
+      }
+
+      // Return the first result if we got an array
+      const updatedLesson = Array.isArray(result) ? result[0] : result
 
       // Clear relevant cache entries
       clearCache('lessons')
@@ -698,7 +1004,7 @@ export class ContentService {
       clearCache('modules')
       clearCache('stats')
 
-      return result
+      return updatedLesson
     } catch (error) {
       handleError('updateLesson', error)
       return null
@@ -813,19 +1119,66 @@ export class ContentService {
         throw new Error('User not authenticated')
       }
 
+      // Check if there are any changes to apply
+      if (Object.keys(data).length === 0) {
+        throw new Error('No data provided for update')
+      }
+
+      // First, check if the challenge exists and get current data
+      const { data: existingChallenge, error: fetchError } = await supabase
+        .from('challenges')
+        .select('*')
+        .eq('id', id)
+        .maybeSingle()
+
+      if (fetchError) {
+        throw new Error(`Error fetching challenge: ${fetchError.message}`)
+      }
+
+      if (!existingChallenge) {
+        throw new Error('Challenge not found')
+      }
+
+      // Prepare update data
+      const updateData = {
+        ...data,
+        updated_by: user.data.user.id
+      }
+
+      // Perform the update
       const { data: result, error } = await supabase
         .from('challenges')
-        .update({
-          ...data,
-          updated_by: user.data.user.id
-        })
+        .update(updateData)
         .eq('id', id)
         .select()
-        .single()
 
       if (error) {
         throw new Error(`Failed to update challenge: ${error.message}`)
       }
+
+      // If no rows were returned, it could mean no changes were needed
+      // Let's fetch the current challenge to verify it exists and return it
+      if (!result || result.length === 0) {
+        const { data: currentChallenge, error: fetchError } = await supabase
+          .from('challenges')
+          .select('*')
+          .eq('id', id)
+          .maybeSingle()
+
+        if (fetchError) {
+          throw new Error(`Failed to fetch challenge after update: ${fetchError.message}`)
+        }
+
+        if (!currentChallenge) {
+          throw new Error('Challenge not found')
+        }
+
+        // Return the current challenge data since no changes were made
+        return currentChallenge
+      }
+
+      // Return the first result if we got an array
+      const updatedChallenge = Array.isArray(result) ? result[0] : result
 
       // Clear relevant cache entries
       clearCache('challenges')
@@ -833,7 +1186,7 @@ export class ContentService {
       clearCache('lessons')
       clearCache('stats')
 
-      return result
+      return updatedChallenge
     } catch (error) {
       handleError('updateChallenge', error)
       return null

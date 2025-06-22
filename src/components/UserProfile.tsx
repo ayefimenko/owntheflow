@@ -144,6 +144,7 @@ export default function UserProfile() {
                   onClick={handleSave}
                   disabled={saving}
                   className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 transition-colors"
+                  type="button"
                 >
                   {saving ? 'Saving...' : 'Save Changes'}
                 </button>
@@ -154,6 +155,7 @@ export default function UserProfile() {
                     setBio(userProfile.bio || '')
                   }}
                   className="bg-gray-300 text-gray-700 px-4 py-2 rounded-md hover:bg-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-500 transition-colors"
+                  type="button"
                 >
                   Cancel
                 </button>
@@ -163,6 +165,7 @@ export default function UserProfile() {
             <button
               onClick={() => setIsEditing(true)}
               className="w-full bg-gray-100 text-gray-700 py-2 px-4 rounded-md hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-gray-500 transition-colors"
+              type="button"
             >
               Edit Profile
             </button>
@@ -258,11 +261,12 @@ export default function UserProfile() {
             <button 
               onClick={() => window.location.href = '/content'}
               className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
+              type="button"
             >
               Open Content Dashboard
             </button>
             {isAdmin && (
-              <button className="bg-red-600 text-white px-4 py-2 rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 transition-colors">
+              <button className="bg-red-600 text-white px-4 py-2 rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 transition-colors" type="button">
                 Admin Settings
               </button>
             )}
@@ -275,6 +279,7 @@ export default function UserProfile() {
         <button
           onClick={handleSignOut}
           className="bg-gray-600 text-white px-6 py-2 rounded-md hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-500 transition-colors"
+          type="button"
         >
           Sign Out
         </button>

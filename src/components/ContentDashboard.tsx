@@ -251,6 +251,7 @@ export default function ContentDashboard() {
             <button
               onClick={loadDashboardData}
               className="bg-red-600 text-white px-4 py-2 rounded-md hover:bg-red-700 transition-colors"
+              type="button"
             >
               Try Again
             </button>
@@ -321,6 +322,7 @@ export default function ContentDashboard() {
                       : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                     }
                   `}
+                  type="button"
                 >
                   <span>{tab.icon}</span>
                   {tab.name}
@@ -488,6 +490,7 @@ function OverviewTab({
             <button 
               onClick={onCreatePath}
               className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 text-sm transition-colors"
+              type="button"
             >
               Create New Path
             </button>
@@ -501,6 +504,7 @@ function OverviewTab({
               <button 
                 onClick={onCreatePath}
                 className="bg-blue-600 text-white px-6 py-2 rounded-md hover:bg-blue-700 transition-colors"
+                type="button"
               >
                 Create Your First Path
               </button>
@@ -531,7 +535,7 @@ function OverviewTab({
                   `}>
                     {path.status}
                   </span>
-                  <button className="text-blue-600 hover:text-blue-700 text-sm transition-colors">
+                  <button className="text-blue-600 hover:text-blue-700 text-sm transition-colors" type="button">
                     Edit
                   </button>
                 </div>
@@ -568,6 +572,7 @@ function PathsTab({
           <button 
             onClick={onCreatePath}
             className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700"
+            type="button"
           >
             Create Learning Path
           </button>
@@ -585,6 +590,7 @@ function PathsTab({
               <button 
                 onClick={onCreatePath}
                 className="bg-blue-600 text-white px-6 py-2 rounded-md hover:bg-blue-700"
+                type="button"
               >
                 Create Learning Path
               </button>
@@ -646,14 +652,15 @@ function PathsTab({
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                       <div className="flex items-center gap-2">
-                        <button 
-                          onClick={() => onEditPath(path)}
-                          className="text-blue-600 hover:text-blue-700"
-                        >
-                          Edit
-                        </button>
+                                            <button 
+                      onClick={() => onEditPath(path)}
+                      className="text-blue-600 hover:text-blue-700"
+                      type="button"
+                    >
+                      Edit
+                    </button>
                         <AdminOnly>
-                          <button className="text-red-600 hover:text-red-700">Delete</button>
+                          <button className="text-red-600 hover:text-red-700" type="button">Delete</button>
                         </AdminOnly>
                       </div>
                     </td>
@@ -727,6 +734,7 @@ function CoursesTab({
           <button 
             onClick={onCreateCourse}
             className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700"
+            type="button"
           >
             Create Course
           </button>
@@ -743,6 +751,7 @@ function CoursesTab({
             <button 
               onClick={onCreateCourse}
               className="bg-blue-600 text-white px-6 py-2 rounded-md hover:bg-blue-700"
+              type="button"
             >
               Create Course
             </button>
@@ -782,11 +791,12 @@ function CoursesTab({
                     <button 
                       onClick={() => onEditCourse(course)}
                       className="text-blue-600 hover:text-blue-700"
+                      type="button"
                     >
                       Edit
                     </button>
                     <AdminOnly>
-                      <button className="text-red-600 hover:text-red-700">Delete</button>
+                      <button className="text-red-600 hover:text-red-700" type="button">Delete</button>
                     </AdminOnly>
                   </div>
                 </div>
@@ -823,6 +833,7 @@ function ModulesTab({
           <button 
             onClick={onCreateModule}
             className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700"
+            type="button"
           >
             Create Module
           </button>
@@ -839,6 +850,7 @@ function ModulesTab({
             <button 
               onClick={onCreateModule}
               className="bg-blue-600 text-white px-6 py-2 rounded-md hover:bg-blue-700"
+              type="button"
             >
               Create Module
             </button>
@@ -879,11 +891,12 @@ function ModulesTab({
                     <button 
                       onClick={() => onEditModule(module)}
                       className="text-blue-600 hover:text-blue-700"
+                      type="button"
                     >
                       Edit
                     </button>
                     <AdminOnly>
-                      <button className="text-red-600 hover:text-red-700">Delete</button>
+                      <button className="text-red-600 hover:text-red-700" type="button">Delete</button>
                     </AdminOnly>
                   </div>
                 </div>
@@ -922,6 +935,7 @@ function LessonsTab({
           <button 
             onClick={onCreateLesson}
             className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700"
+            type="button"
           >
             Create Lesson
           </button>
@@ -938,6 +952,7 @@ function LessonsTab({
             <button 
               onClick={onCreateLesson}
               className="bg-blue-600 text-white px-6 py-2 rounded-md hover:bg-blue-700"
+              type="button"
             >
               Create Lesson
             </button>
@@ -988,17 +1003,19 @@ function LessonsTab({
                     <button 
                       onClick={() => onPreviewLesson(lesson)}
                       className="text-green-600 hover:text-green-700"
+                      type="button"
                     >
                       Preview
                     </button>
                     <button 
                       onClick={() => onEditLesson(lesson)}
                       className="text-blue-600 hover:text-blue-700"
+                      type="button"
                     >
                       Edit
                     </button>
                     <AdminOnly>
-                      <button className="text-red-600 hover:text-red-700">Delete</button>
+                      <button className="text-red-600 hover:text-red-700" type="button">Delete</button>
                     </AdminOnly>
                   </div>
                 </div>
@@ -1035,6 +1052,7 @@ function ChallengesTab({
           <button 
             onClick={onCreateChallenge}
             className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700"
+            type="button"
           >
             Create Challenge
           </button>
@@ -1051,6 +1069,7 @@ function ChallengesTab({
             <button 
               onClick={onCreateChallenge}
               className="bg-blue-600 text-white px-6 py-2 rounded-md hover:bg-blue-700"
+              type="button"
             >
               Create Challenge
             </button>
@@ -1092,11 +1111,12 @@ function ChallengesTab({
                     <button 
                       onClick={() => onEditChallenge(challenge)}
                       className="text-blue-600 hover:text-blue-700"
+                      type="button"
                     >
                       Edit
                     </button>
                     <AdminOnly>
-                      <button className="text-red-600 hover:text-red-700">Delete</button>
+                      <button className="text-red-600 hover:text-red-700" type="button">Delete</button>
                     </AdminOnly>
                   </div>
                 </div>

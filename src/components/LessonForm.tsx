@@ -188,23 +188,61 @@ export default function LessonForm({ lesson, moduleId, onSave, onCancel }: Lesso
       let result: Lesson | null = null
 
       if (lesson) {
-        // Update existing lesson
-        const updateData: UpdateLessonDto = {
-          module_id: formData.module_id,
-          title: formData.title,
-          slug: formData.slug,
-          content: formData.content || undefined,
-          summary: formData.summary || undefined,
-          estimated_minutes: formData.estimated_minutes,
-          xp_reward: formData.xp_reward,
-          lesson_type: formData.lesson_type,
-          sort_order: formData.sort_order,
-          video_url: formData.video_url || undefined,
-          video_duration: formData.video_duration || undefined,
-          meta_title: formData.meta_title || undefined,
-          meta_description: formData.meta_description || undefined,
-          status: formData.status
+        // Update existing lesson - only include changed fields
+        const updateData: UpdateLessonDto = {}
+        
+        if (formData.module_id !== lesson.module_id) {
+          updateData.module_id = formData.module_id
         }
+        if (formData.title !== lesson.title) {
+          updateData.title = formData.title
+        }
+        if (formData.slug !== lesson.slug) {
+          updateData.slug = formData.slug
+        }
+        if (formData.content !== (lesson.content || '')) {
+          updateData.content = formData.content || undefined
+        }
+        if (formData.summary !== (lesson.summary || '')) {
+          updateData.summary = formData.summary || undefined
+        }
+        if (formData.estimated_minutes !== lesson.estimated_minutes) {
+          updateData.estimated_minutes = formData.estimated_minutes
+        }
+        if (formData.xp_reward !== lesson.xp_reward) {
+          updateData.xp_reward = formData.xp_reward
+        }
+        if (formData.lesson_type !== lesson.lesson_type) {
+          updateData.lesson_type = formData.lesson_type
+        }
+        if (formData.sort_order !== lesson.sort_order) {
+          updateData.sort_order = formData.sort_order
+        }
+        if (formData.video_url !== (lesson.video_url || '')) {
+          updateData.video_url = formData.video_url || undefined
+        }
+        if (formData.video_duration !== (lesson.video_duration || 0)) {
+          updateData.video_duration = formData.video_duration || undefined
+        }
+        if (formData.meta_title !== (lesson.meta_title || '')) {
+          updateData.meta_title = formData.meta_title || undefined
+        }
+        if (formData.meta_description !== (lesson.meta_description || '')) {
+          updateData.meta_description = formData.meta_description || undefined
+        }
+        if (formData.status !== lesson.status) {
+          updateData.status = formData.status
+        }
+
+        // Only proceed if there are actual changes
+        if (Object.keys(updateData).length === 0) {
+          // No changes detected - this is not an error, just show a message
+          console.log('No changes detected in lesson form')
+          onSave(lesson) // Call onSave with the existing lesson to close the form
+          return
+        }
+
+        console.log('Updating lesson with data:', updateData)
         result = await ContentService.updateLesson(lesson.id, updateData)
       } else {
         // Create new lesson

@@ -86,6 +86,7 @@ class ErrorBoundary extends Component<Props, State> {
               <button
                 onClick={() => window.location.reload()}
                 className="w-full bg-red-600 text-white px-6 py-3 rounded-md font-semibold hover:bg-red-700 transition-colors"
+                type="button"
               >
                 Refresh Page
               </button>
@@ -94,12 +95,14 @@ class ErrorBoundary extends Component<Props, State> {
                   this.setState({ hasError: false, error: undefined, errorInfo: undefined })
                 }}
                 className="w-full text-gray-600 px-6 py-3 rounded-md font-semibold hover:bg-gray-50 transition-colors"
+                type="button"
               >
                 Try Again
               </button>
               <button
                 onClick={() => window.location.href = '/'}
                 className="w-full text-blue-600 px-6 py-3 rounded-md font-semibold hover:bg-blue-50 transition-colors"
+                type="button"
               >
                 Go Home
               </button>

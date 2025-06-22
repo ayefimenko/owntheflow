@@ -62,17 +62,43 @@ export default function ModuleForm({ module, courseId, onSave, onCancel }: Modul
       let result: Module | null = null
 
       if (module) {
-        // Update existing module
-        const updateData: UpdateModuleDto = {
-          course_id: formData.course_id,
-          title: formData.title,
-          slug: formData.slug,
-          description: formData.description || undefined,
-          short_description: formData.short_description || undefined,
-          estimated_minutes: formData.estimated_minutes,
-          sort_order: formData.sort_order,
-          status: formData.status
+        // Update existing module - only include changed fields
+        const updateData: UpdateModuleDto = {}
+        
+        if (formData.course_id !== module.course_id) {
+          updateData.course_id = formData.course_id
         }
+        if (formData.title !== module.title) {
+          updateData.title = formData.title
+        }
+        if (formData.slug !== module.slug) {
+          updateData.slug = formData.slug
+        }
+        if (formData.description !== (module.description || '')) {
+          updateData.description = formData.description || undefined
+        }
+        if (formData.short_description !== (module.short_description || '')) {
+          updateData.short_description = formData.short_description || undefined
+        }
+        if (formData.estimated_minutes !== module.estimated_minutes) {
+          updateData.estimated_minutes = formData.estimated_minutes
+        }
+        if (formData.sort_order !== module.sort_order) {
+          updateData.sort_order = formData.sort_order
+        }
+        if (formData.status !== module.status) {
+          updateData.status = formData.status
+        }
+
+        // Only proceed if there are actual changes
+        if (Object.keys(updateData).length === 0) {
+          // No changes detected - this is not an error, just show a message
+          console.log('No changes detected in module form')
+          onSave(module) // Call onSave with the existing module to close the form
+          return
+        }
+
+        console.log('Updating module with data:', updateData)
         result = await ContentService.updateModule(module.id, updateData)
       } else {
         // Create new module

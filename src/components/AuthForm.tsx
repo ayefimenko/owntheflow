@@ -116,6 +116,7 @@ export default function AuthForm({ mode, onToggleMode, onBack, onSignupSuccess, 
         <button
           onClick={onBack}
           className="mb-4 text-blue-600 hover:text-blue-700 font-medium flex items-center"
+          type="button"
         >
           ← Back to home
         </button>
@@ -198,6 +199,7 @@ export default function AuthForm({ mode, onToggleMode, onBack, onSignupSuccess, 
           <button
             onClick={onToggleMode}
             className="text-blue-600 hover:text-blue-700 font-medium focus:outline-none focus:underline"
+            type="button"
           >
             {mode === 'signin' ? 'Sign up' : 'Sign in'}
           </button>

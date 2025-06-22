@@ -15,12 +15,12 @@ export default function ContentPage() {
                 You need to be a content manager or admin to access this page.
               </p>
               <div className="space-y-3">
-                <a 
-                  href="/"
+                <button
+                  onClick={() => window.location.href = '/'}
                   className="block bg-blue-600 text-white px-6 py-3 rounded-md hover:bg-blue-700 transition-colors"
                 >
                   Back to Home
-                </a>
+                </button>
                 <p className="text-sm text-gray-500">
                   Please sign in with an admin or content manager account.
                 </p>

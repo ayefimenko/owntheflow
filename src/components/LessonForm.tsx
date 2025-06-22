@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import dynamic from 'next/dynamic'
 import { Lesson, CreateLessonDto, UpdateLessonDto, Module, ContentStatus, LessonType } from '@/types/content'
 import { ContentService } from '@/lib/content'
+import { AIService, AI_ROLES, AIRole } from '@/lib/ai'
 
 // Dynamically import the markdown editor to avoid SSR issues
 const MDEditor = dynamic(
@@ -41,6 +42,12 @@ export default function LessonForm({ lesson, moduleId, onSave, onCancel }: Lesso
   const [error, setError] = useState<string | null>(null)
   const [showPreview, setShowPreview] = useState(false)
 
+  // AI Assistant states
+  const [aiLoading, setAiLoading] = useState(false)
+  const [aiError, setAiError] = useState<string | null>(null)
+  const [selectedRole, setSelectedRole] = useState<AIRole>('general')
+  const [showAiPanel, setShowAiPanel] = useState(false)
+
   // Load modules for selection
   useEffect(() => {
     const loadModules = async () => {
@@ -74,6 +81,88 @@ export default function LessonForm({ lesson, moduleId, onSave, onCancel }: Lesso
     }
   }, [formData.title, formData.meta_title])
 
+  // AI Assistant Functions
+  const handleAiAction = async (action: 'summarize' | 'rewrite' | 'improve' | 'generate' | 'meta') => {
+    if (!AIService.isAvailable()) {
+      setAiError('AI service is not available. Please check your OpenAI API key.')
+      return
+    }
+
+    setAiLoading(true)
+    setAiError(null)
+
+    try {
+      let result: string | null = null
+
+      switch (action) {
+        case 'summarize':
+          if (!formData.content.trim()) {
+            setAiError('Please add some content to summarize')
+            return
+          }
+          result = await AIService.summarizeContent(formData.content)
+          if (result) {
+            setFormData(prev => ({ ...prev, summary: result as string }))
+          }
+          break
+
+        case 'rewrite':
+          if (!formData.content.trim()) {
+            setAiError('Please add some content to rewrite')
+            return
+          }
+          result = await AIService.rewriteForRole(formData.content, selectedRole)
+          if (result) {
+            setFormData(prev => ({ ...prev, content: result as string }))
+          }
+          break
+
+        case 'improve':
+          if (!formData.content.trim()) {
+            setAiError('Please add some content to improve')
+            return
+          }
+          result = await AIService.improveWriting(formData.content)
+          if (result) {
+            setFormData(prev => ({ ...prev, content: result as string }))
+          }
+          break
+
+        case 'generate':
+          if (!formData.title.trim()) {
+            setAiError('Please add a lesson title to generate content')
+            return
+          }
+          result = await AIService.generateContent(formData.title, selectedRole, 'lesson')
+          if (result) {
+            setFormData(prev => ({ ...prev, content: result as string }))
+          }
+          break
+
+        case 'meta':
+          if (!formData.title.trim() || !formData.content.trim()) {
+            setAiError('Please add a title and content to generate meta description')
+            return
+          }
+          result = await AIService.generateMetaDescription(formData.title, formData.content)
+          if (result) {
+            setFormData(prev => ({ ...prev, meta_description: result as string }))
+          }
+          break
+      }
+
+      if (!result) {
+        setAiError('AI service returned no results. Please try again.')
+      }
+
+    } catch (error) {
+      console.error('AI action failed:', error)
+      setAiError(error instanceof Error ? error.message : 'AI operation failed')
+    } finally {
+      setAiLoading(false)
+    }
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
@@ -83,19 +172,16 @@ export default function LessonForm({ lesson, moduleId, onSave, onCancel }: Lesso
       // Validate required fields
       if (!formData.module_id) {
         setError('Please select a module')
-        setLoading(false)
         return
       }
 
       if (!formData.title.trim()) {
         setError('Please enter a lesson title')
-        setLoading(false)
         return
       }
 
       if (!formData.slug.trim()) {
         setError('Please enter a lesson slug')
-        setLoading(false)
         return
       }
 
@@ -168,23 +254,6 @@ export default function LessonForm({ lesson, moduleId, onSave, onCancel }: Lesso
     }))
   }
 
-  const handleSaveAsDraft = async () => {
-    const currentStatus = formData.status
-    setFormData(prev => ({ ...prev, status: 'draft' }))
-    
-    // Create a form event to trigger submission
-    const form = document.querySelector('form') as HTMLFormElement
-    if (form) {
-      const event = new Event('submit', { bubbles: true, cancelable: true })
-      form.dispatchEvent(event)
-    }
-    
-    // Restore original status if needed
-    setTimeout(() => {
-      setFormData(prev => ({ ...prev, status: currentStatus }))
-    }, 100)
-  }
-
   const getStatusBadgeColor = (status: ContentStatus) => {
     switch (status) {
       case 'published': return 'bg-green-100 text-green-800'
@@ -197,73 +266,168 @@ export default function LessonForm({ lesson, moduleId, onSave, onCancel }: Lesso
   return (
     <div className="max-w-4xl mx-auto">
       <form onSubmit={handleSubmit} className="space-y-6">
+        {/* Error Display */}
+        {(error || aiError) && (
+          <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-md">
+            <p className="font-medium">Error</p>
+            <p className="text-sm">{error || aiError}</p>
+          </div>
+        )}
+
         <div className="space-y-4">
+          {/* Header */}
           <div className="flex items-center justify-between">
-            <h3 className="text-lg font-medium text-gray-900">
-              {lesson ? 'Edit Lesson' : 'Create New Lesson'}
-            </h3>
-            <div className="flex items-center space-x-2">
-              <span className={`px-2 py-1 text-xs font-medium rounded-full ${getStatusBadgeColor(formData.status)}`}>
-                {formData.status.charAt(0).toUpperCase() + formData.status.slice(1)}
-              </span>
-              <button
-                type="button"
-                onClick={() => setShowPreview(!showPreview)}
-                className="px-3 py-1 text-sm bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 transition-colors"
-              >
-                {showPreview ? 'Hide Preview' : 'Show Preview'}
-              </button>
+            <div>
+              <h2 className="text-2xl font-bold text-gray-900">
+                {lesson ? 'Edit Lesson' : 'Create New Lesson'}
+              </h2>
+              {lesson && (
+                <div className="flex items-center mt-2 space-x-2">
+                  <span className={`px-2 py-1 text-xs font-medium rounded-full ${getStatusBadgeColor(lesson.status)}`}>
+                    {lesson.status.charAt(0).toUpperCase() + lesson.status.slice(1)}
+                  </span>
+                  <span className="text-sm text-gray-500">
+                    Created {new Date(lesson.created_at).toLocaleDateString()}
+                  </span>
+                </div>
+              )}
             </div>
+
+            {/* AI Assistant Toggle */}
+            {AIService.isAvailable() && (
+              <div className="flex items-center space-x-2">
+                <div className="flex items-center space-x-2 text-sm text-gray-600">
+                  <div className="w-2 h-2 bg-green-400 rounded-full"></div>
+                  <span>AI Assistant</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowAiPanel(!showAiPanel)}
+                  className={`px-3 py-1 text-sm font-medium rounded-md transition-colors ${
+                    showAiPanel 
+                      ? 'bg-blue-100 text-blue-700' 
+                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  }`}
+                >
+                  🤖 {showAiPanel ? 'Hide' : 'Show'} AI
+                </button>
+              </div>
+            )}
           </div>
 
-          {error && (
-            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
-              {error}
+          {/* AI Assistant Panel */}
+          {showAiPanel && AIService.isAvailable() && (
+            <div className="bg-blue-50 border border-blue-200 rounded-md p-4">
+              <h3 className="text-lg font-medium text-blue-900 mb-3">🤖 AI Assistant</h3>
+              
+              {/* Role Selection */}
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-blue-800 mb-2">
+                  Target Audience
+                </label>
+                <select
+                  value={selectedRole}
+                  onChange={(e) => setSelectedRole(e.target.value as AIRole)}
+                  className="block w-full px-3 py-2 border border-blue-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-gray-900"
+                >
+                  {AI_ROLES.map(role => (
+                    <option key={role.value} value={role.value}>
+                      {role.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* AI Action Buttons */}
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                <button
+                  type="button"
+                  onClick={() => handleAiAction('generate')}
+                  disabled={aiLoading}
+                  className="flex items-center justify-center px-3 py-2 text-sm font-medium text-blue-700 bg-white border border-blue-300 rounded-md hover:bg-blue-50 disabled:opacity-50"
+                >
+                  {aiLoading ? '⏳' : '✨'} Generate
+                </button>
+                
+                <button
+                  type="button"
+                  onClick={() => handleAiAction('rewrite')}
+                  disabled={aiLoading}
+                  className="flex items-center justify-center px-3 py-2 text-sm font-medium text-blue-700 bg-white border border-blue-300 rounded-md hover:bg-blue-50 disabled:opacity-50"
+                >
+                  {aiLoading ? '⏳' : '🎯'} Rewrite
+                </button>
+                
+                <button
+                  type="button"
+                  onClick={() => handleAiAction('improve')}
+                  disabled={aiLoading}
+                  className="flex items-center justify-center px-3 py-2 text-sm font-medium text-blue-700 bg-white border border-blue-300 rounded-md hover:bg-blue-50 disabled:opacity-50"
+                >
+                  {aiLoading ? '⏳' : '📝'} Improve
+                </button>
+                
+                <button
+                  type="button"
+                  onClick={() => handleAiAction('summarize')}
+                  disabled={aiLoading}
+                  className="flex items-center justify-center px-3 py-2 text-sm font-medium text-blue-700 bg-white border border-blue-300 rounded-md hover:bg-blue-50 disabled:opacity-50"
+                >
+                  {aiLoading ? '⏳' : '📋'} Summarize
+                </button>
+                
+                <button
+                  type="button"
+                  onClick={() => handleAiAction('meta')}
+                  disabled={aiLoading}
+                  className="flex items-center justify-center px-3 py-2 text-sm font-medium text-blue-700 bg-white border border-blue-300 rounded-md hover:bg-blue-50 disabled:opacity-50"
+                >
+                  {aiLoading ? '⏳' : '🔍'} SEO Meta
+                </button>
+              </div>
             </div>
           )}
 
+          {/* Module Selection */}
+          <div>
+            <label htmlFor="module_id" className="block text-sm font-medium text-gray-700">
+              Module *
+            </label>
+            <select
+              id="module_id"
+              name="module_id"
+              value={formData.module_id}
+              onChange={handleInputChange}
+              required
+              className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-gray-900"
+            >
+              <option value="">Select a module</option>
+              {modules.map(module => (
+                <option key={module.id} value={module.id}>
+                  {module.title}
+                </option>
+              ))}
+            </select>
+          </div>
+
           {/* Basic Information */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {/* Module Selection */}
             <div>
-              <label htmlFor="module_id" className="block text-sm font-medium text-gray-700">
-                Module *
+              <label htmlFor="title" className="block text-sm font-medium text-gray-700">
+                Title *
               </label>
-              <select
-                id="module_id"
-                name="module_id"
-                value={formData.module_id}
+              <input
+                type="text"
+                id="title"
+                name="title"
+                value={formData.title}
                 onChange={handleInputChange}
                 required
-                disabled={!!moduleId || modules.length === 0}
-                className={`mt-1 block w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none text-gray-900 ${
-                  !formData.module_id && error 
-                    ? 'border-red-300 focus:ring-red-500 focus:border-red-500' 
-                    : 'border-gray-300 focus:ring-blue-500 focus:border-blue-500'
-                }`}
-              >
-                <option value="">
-                  {modules.length === 0 ? 'No modules available' : 'Select a module'}
-                </option>
-                {modules.map(module => (
-                  <option key={module.id} value={module.id}>
-                    {module.title}
-                  </option>
-                ))}
-              </select>
-              {modules.length === 0 && (
-                <p className="mt-1 text-sm text-amber-600">
-                  Please create a module first before adding lessons.
-                </p>
-              )}
-              {!formData.module_id && error && (
-                <p className="mt-1 text-sm text-red-600">
-                  Please select a module for this lesson.
-                </p>
-              )}
+                className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-gray-900"
+                placeholder="Enter lesson title"
+              />
             </div>
 
-            {/* Lesson Type */}
             <div>
               <label htmlFor="lesson_type" className="block text-sm font-medium text-gray-700">
                 Lesson Type *
@@ -282,23 +446,6 @@ export default function LessonForm({ lesson, moduleId, onSave, onCancel }: Lesso
                 <option value="quiz">Quiz</option>
               </select>
             </div>
-          </div>
-
-          {/* Title */}
-          <div>
-            <label htmlFor="title" className="block text-sm font-medium text-gray-700">
-              Title *
-            </label>
-            <input
-              type="text"
-              id="title"
-              name="title"
-              value={formData.title}
-              onChange={handleInputChange}
-              required
-              className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-gray-900"
-              placeholder="Enter lesson title"
-            />
           </div>
 
           {/* Slug */}
@@ -336,9 +483,18 @@ export default function LessonForm({ lesson, moduleId, onSave, onCancel }: Lesso
 
           {/* Content Editor */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Content
-            </label>
+            <div className="flex items-center justify-between mb-2">
+              <label className="block text-sm font-medium text-gray-700">
+                Content
+              </label>
+              <button
+                type="button"
+                onClick={() => setShowPreview(!showPreview)}
+                className="px-3 py-1 text-sm bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 transition-colors"
+              >
+                {showPreview ? 'Hide Preview' : 'Show Preview'}
+              </button>
+            </div>
             <div className="border border-gray-300 rounded-md overflow-hidden">
               <MDEditor
                 value={formData.content}
@@ -349,7 +505,7 @@ export default function LessonForm({ lesson, moduleId, onSave, onCancel }: Lesso
               />
             </div>
             <p className="mt-1 text-sm text-gray-500">
-              Use Markdown syntax to format your lesson content. Click &quot;Show Preview&quot; to see how it will look.
+              Use Markdown syntax to format your lesson content.
             </p>
           </div>
 
@@ -517,16 +673,9 @@ export default function LessonForm({ lesson, moduleId, onSave, onCancel }: Lesso
           
           <div className="flex space-x-3">
             <button
-              type="button"
-              onClick={handleSaveAsDraft}
-              className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 border border-gray-300 rounded-md hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-gray-500"
-            >
-              Save as Draft
-            </button>
-            <button
               type="submit"
               disabled={loading}
-              className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
+              className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {loading ? 'Saving...' : (lesson ? 'Update Lesson' : 'Create Lesson')}
             </button>

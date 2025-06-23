@@ -8,7 +8,7 @@ import RoleBadge from './RoleBadge'
 import { ROLE_PERMISSIONS } from '@/types/auth'
 import { DatabaseService } from '@/lib/database'
 import { ContentService } from '@/lib/content'
-import type { UserXP, XPLevel, UserLearningStats } from '@/types/content'
+import type { UserXP, XPLevel, UserLearningStats, Certificate } from '@/types/content'
 
 export default function UserProfile() {
   const { user, userProfile, signOut, isRole } = useAuth()
@@ -23,33 +23,42 @@ export default function UserProfile() {
   const [xpLevels, setXpLevels] = useState<XPLevel[]>([])
   const [showLevelUpModal, setShowLevelUpModal] = useState(false)
   const [newLevelAchieved, setNewLevelAchieved] = useState<XPLevel | null>(null)
+  
+  // Sprint 7: Certificates
+  const [certificates, setCertificates] = useState<Certificate[]>([])
+  const [loadingCertificates, setLoadingCertificates] = useState(false)
 
   // Component state logging only in development
   if (process.env.NODE_ENV === 'development') {
     console.log('UserProfile render - user:', user?.email || 'none', 'profile:', userProfile?.role || 'none')
   }
 
-  // Load XP data when user is authenticated
+  // Load XP data and certificates when user is authenticated
   useEffect(() => {
-    async function loadXPData() {
+    async function loadUserData() {
       if (!user) return
 
       try {
-        const [xpData, statsData, levelsData] = await Promise.all([
+        setLoadingCertificates(true)
+        const [xpData, statsData, levelsData, certsData] = await Promise.all([
           ContentService.getUserXP(user.id),
           ContentService.getUserLearningStats(user.id),
-          ContentService.getXPLevels()
+          ContentService.getXPLevels(),
+          ContentService.getUserCertificates(user.id)
         ])
 
         setUserXP(xpData)
         setUserStats(statsData)
         setXpLevels(levelsData)
+        setCertificates(certsData || [])
       } catch (error) {
-        console.error('Error loading XP data:', error)
+        console.error('Error loading user data:', error)
+      } finally {
+        setLoadingCertificates(false)
       }
     }
 
-    loadXPData()
+    loadUserData()
   }, [user])
 
   const handleSave = async () => {
@@ -240,6 +249,94 @@ export default function UserProfile() {
                 <div className="text-xs text-gray-600">Certificates</div>
               </div>
             </div>
+          </div>
+        )}
+
+        {/* Certificates Section */}
+        {certificates.length > 0 && (
+          <div className="bg-gradient-to-r from-green-50 to-emerald-50 rounded-lg p-6 mb-6">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-gray-900">🎓 Your Certificates</h3>
+              <span className="text-sm text-gray-600">{certificates.length} earned</span>
+            </div>
+            
+            <div className="grid gap-4 md:grid-cols-2">
+              {certificates.slice(0, 4).map((cert) => (
+                <div key={cert.id} className="bg-white rounded-lg border border-green-200 p-4 shadow-sm">
+                  <div className="flex items-start justify-between mb-2">
+                    <div className="flex-1">
+                      <h4 className="font-semibold text-gray-900 text-sm mb-1">
+                        {cert.path?.title || cert.course?.title || cert.title}
+                      </h4>
+                      <p className="text-xs text-gray-600 mb-2">
+                        {cert.certificate_type === 'completion' ? 'Completion Certificate' : 'Achievement Certificate'}
+                      </p>
+                      <div className="flex items-center text-xs text-gray-500">
+                        <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3a2 2 0 012-2h4a2 2 0 012 2v4m-6 9l2 2 4-4m6-2V9a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                        </svg>
+                        {new Date(cert.issued_at).toLocaleDateString()}
+                      </div>
+                    </div>
+                    <div className={`w-3 h-3 rounded-full ${
+                      cert.status === 'issued' ? 'bg-green-500' : 'bg-red-500'
+                    }`} />
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => window.open(`/cert/${cert.verification_code}`, '_blank')}
+                      className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded hover:bg-blue-200 transition-colors"
+                    >
+                      View
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const url = `${window.location.origin}/cert/${cert.verification_code}`
+                        navigator.clipboard.writeText(url)
+                      }}
+                      className="text-xs bg-gray-100 text-gray-700 px-2 py-1 rounded hover:bg-gray-200 transition-colors"
+                    >
+                      Copy Link
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+            
+            {certificates.length > 4 && (
+              <div className="text-center mt-4">
+                <button
+                  type="button"
+                  className="text-sm text-blue-600 hover:text-blue-700 font-medium"
+                >
+                  View all {certificates.length} certificates
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Empty Certificates State */}
+        {certificates.length === 0 && !loadingCertificates && (
+          <div className="bg-gray-50 rounded-lg p-6 mb-6 text-center">
+            <div className="w-16 h-16 mx-auto mb-4 bg-gray-200 rounded-full flex items-center justify-center">
+              <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z" />
+              </svg>
+            </div>
+            <h3 className="text-gray-900 font-medium mb-2">No certificates yet</h3>
+            <p className="text-gray-600 text-sm mb-4">
+              Complete learning paths and courses to earn certificates!
+            </p>
+            <button
+              type="button"
+              onClick={() => window.location.href = '/learn'}
+              className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors text-sm"
+            >
+              Start Learning
+            </button>
           </div>
         )}
 

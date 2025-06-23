@@ -92,7 +92,7 @@ export function LessonPlayer({ lessonId }: LessonPlayerProps) {
         if (user) {
           const progressData = await ContentService.getUserProgress(user.id)
           const lessonProgress = progressData.find(p => 
-            p.content_id === lessonId && p.content_type === 'lesson'
+            p.lesson_id === lessonId
           )
           setProgress(lessonProgress || null)
         }
@@ -119,10 +119,41 @@ export function LessonPlayer({ lessonId }: LessonPlayerProps) {
         xp_earned: lesson.xp_reward
       })
 
+      // Check for path/course completion and auto-issue certificates (Sprint 7)
+      if (path) {
+        try {
+          const isPathComplete = await ContentService.checkPathCompletion(user.id, path.id)
+          if (isPathComplete) {
+            const certificate = await ContentService.autoIssueCertificateOnCompletion(user.id, path.id, 'path')
+            if (certificate) {
+              // Show success notification or modal for certificate earned
+              console.log('🎉 Path completion certificate issued!', certificate)
+            }
+          }
+        } catch (certError) {
+          console.error('Error checking path completion for certificate:', certError)
+        }
+      }
+
+      if (course) {
+        try {
+          const isCourseComplete = await ContentService.checkCourseCompletion(user.id, course.id)
+          if (isCourseComplete) {
+            const certificate = await ContentService.autoIssueCertificateOnCompletion(user.id, course.id, 'course')
+            if (certificate) {
+              // Show success notification or modal for certificate earned
+              console.log('🎉 Course completion certificate issued!', certificate)
+            }
+          }
+        } catch (certError) {
+          console.error('Error checking course completion for certificate:', certError)
+        }
+      }
+
       // Refresh progress
       const progressData = await ContentService.getUserProgress(user.id)
       const lessonProgress = progressData.find(p => 
-        p.content_id === lessonId && p.content_type === 'lesson'
+        p.lesson_id === lessonId
       )
       setProgress(lessonProgress || null)
     } catch (error) {
@@ -150,7 +181,7 @@ export function LessonPlayer({ lessonId }: LessonPlayerProps) {
       setTimeout(async () => {
         const progressData = await ContentService.getUserProgress(user.id)
         const lessonProgress = progressData.find(p => 
-          p.content_id === lessonId && p.content_type === 'lesson'
+          p.lesson_id === lessonId
         )
         setProgress(lessonProgress || null)
       }, 1000)

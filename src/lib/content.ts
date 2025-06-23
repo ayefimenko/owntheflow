@@ -1498,7 +1498,9 @@ export class ContentService {
           .from('certificates')
           .select(`
             *,
-            user:user_profiles(display_name, avatar_url)
+            user:user_profiles(display_name, avatar_url),
+            path:learning_paths(title, description),
+            course:courses(title, description)
           `)
           .eq('verification_code', verificationCode)
           .single()
@@ -1512,6 +1514,337 @@ export class ContentService {
     } catch (error) {
       handleError('getCertificateByCode', error)
       return null
+    }
+  }
+
+  /**
+   * Issue a certificate for completing a learning path or course
+   */
+  static async issueCertificate(
+    userId: string,
+    contentId: string,
+    contentType: 'path' | 'course',
+    certificateType: 'completion' | 'achievement' = 'completion'
+  ): Promise<Certificate | null> {
+    try {
+      if (!validateSupabase()) return null
+
+      const user = await supabase.auth.getUser()
+      if (!user.data.user?.id) {
+        throw new Error('User not authenticated')
+      }
+
+      // Generate unique verification code
+      const verificationCode = await this.generateVerificationCode()
+
+      // Get content details for certificate
+      const contentTable = contentType === 'path' ? 'learning_paths' : 'courses'
+      const { data: content, error: contentError } = await supabase
+        .from(contentTable)
+        .select('title, description')
+        .eq('id', contentId)
+        .single()
+
+      if (contentError || !content) {
+        throw new Error(`Failed to fetch ${contentType} details: ${contentError?.message}`)
+      }
+
+      // Create certificate record
+      const certificateData = {
+        user_id: userId,
+        ...(contentType === 'path' ? { path_id: contentId } : { course_id: contentId }),
+        certificate_type: certificateType,
+        title: `${certificateType === 'completion' ? 'Certificate of Completion' : 'Achievement Certificate'} - ${content.title}`,
+        description: `This certifies that the learner has successfully completed ${content.title}`,
+        verification_code: verificationCode,
+        status: 'issued' as const,
+        issued_by: user.data.user.id,
+        issued_at: new Date().toISOString()
+      }
+
+      const { data: certificate, error } = await supabase
+        .from('certificates')
+        .insert(certificateData)
+        .select(`
+          *,
+          user:user_profiles(display_name, avatar_url),
+          path:learning_paths(title, description),
+          course:courses(title, description)
+        `)
+        .single()
+
+      if (error) {
+        throw new Error(`Failed to issue certificate: ${error.message}`)
+      }
+
+      // Clear relevant cache entries
+      clearCache(`user_certificates_${userId}`)
+      clearCache(`user_stats_${userId}`)
+
+      return certificate
+    } catch (error) {
+      handleError('issueCertificate', error)
+      return null
+    }
+  }
+
+  /**
+   * Revoke a certificate (admin only)
+   */
+  static async revokeCertificate(certificateId: string, reason?: string): Promise<boolean> {
+    try {
+      if (!validateSupabase()) return false
+
+      const user = await supabase.auth.getUser()
+      if (!user.data.user?.id) {
+        throw new Error('User not authenticated')
+      }
+
+      // Check if user is admin
+      const { data: profile, error: profileError } = await supabase
+        .from('user_profiles')
+        .select('role')
+        .eq('id', user.data.user.id)
+        .single()
+
+      if (profileError || profile?.role !== 'admin') {
+        throw new Error('Only admins can revoke certificates')
+      }
+
+      const { error } = await supabase
+        .from('certificates')
+        .update({
+          status: 'revoked',
+          revoked_by: user.data.user.id,
+          revoked_at: new Date().toISOString()
+        })
+        .eq('id', certificateId)
+
+      if (error) {
+        throw new Error(`Failed to revoke certificate: ${error.message}`)
+      }
+
+      // Clear cache
+      clearCache('certificate_')
+
+      return true
+    } catch (error) {
+      handleError('revokeCertificate', error)
+      return false
+    }
+  }
+
+  /**
+   * Generate a unique verification code for certificates
+   */
+  private static async generateVerificationCode(): Promise<string> {
+    const characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'
+    const length = 12
+    
+    let attempts = 0
+    const maxAttempts = 10
+
+    while (attempts < maxAttempts) {
+      let code = ''
+      for (let i = 0; i < length; i++) {
+        code += characters.charAt(Math.floor(Math.random() * characters.length))
+      }
+
+      // Format as XXX-XXX-XXX-XXX
+      const formattedCode = code.match(/.{1,3}/g)?.join('-') || code
+
+      // Check if code already exists
+      const { data, error } = await supabase
+        .from('certificates')
+        .select('id')
+        .eq('verification_code', formattedCode)
+        .maybeSingle()
+
+      if (error && error.code !== 'PGRST116') { // PGRST116 is "no rows returned"
+        throw new Error(`Failed to check verification code uniqueness: ${error.message}`)
+      }
+
+      if (!data) {
+        return formattedCode
+      }
+
+      attempts++
+    }
+
+    throw new Error('Failed to generate unique verification code after maximum attempts')
+  }
+
+  /**
+   * Check if user has completed a learning path (all courses and lessons completed)
+   */
+  static async checkPathCompletion(userId: string, pathId: string): Promise<boolean> {
+    try {
+      if (!validateSupabase()) return false
+
+      // Get all published courses in the path
+      const { data: courses, error: coursesError } = await supabase
+        .from('courses')
+        .select('id')
+        .eq('path_id', pathId)
+        .eq('status', 'published')
+
+      if (coursesError || !courses) {
+        return false
+      }
+
+      if (courses.length === 0) {
+        return false // Path has no courses
+      }
+
+      const courseIds = courses.map((c: { id: string }) => c.id)
+
+      // Get all published modules in these courses
+      const { data: modules, error: modulesError } = await supabase
+        .from('modules')
+        .select('id')
+        .in('course_id', courseIds)
+        .eq('status', 'published')
+
+      if (modulesError || !modules) {
+        return false
+      }
+
+      if (modules.length === 0) {
+        return false // Courses have no modules
+      }
+
+      const moduleIds = modules.map((m: { id: string }) => m.id)
+
+      // Get all published lessons in these modules
+      const { data: lessons, error: lessonsError } = await supabase
+        .from('lessons')
+        .select('id')
+        .in('module_id', moduleIds)
+        .eq('status', 'published')
+
+      if (lessonsError || !lessons) {
+        return false
+      }
+
+      if (lessons.length === 0) {
+        return false // Modules have no lessons
+      }
+
+      const lessonIds = lessons.map((l: { id: string }) => l.id)
+
+      // Check user progress for all lessons
+      const { data: progress, error: progressError } = await supabase
+        .from('user_progress')
+        .select('lesson_id, status')
+        .eq('user_id', userId)
+        .in('lesson_id', lessonIds)
+        .eq('status', 'completed')
+
+      if (progressError) {
+        return false
+      }
+
+      // User has completed the path if they completed all required lessons
+      return (progress?.length || 0) === lessonIds.length
+    } catch (error) {
+      handleError('checkPathCompletion', error)
+      return false
+    }
+  }
+
+  /**
+   * Automatically issue certificates when path/course is completed
+   */
+  static async autoIssueCertificateOnCompletion(
+    userId: string,
+    contentId: string,
+    contentType: 'path' | 'course'
+  ): Promise<Certificate | null> {
+    try {
+      // Check if certificate already exists
+      const existing = await this.getUserCertificates(userId)
+      const hasExisting = existing.some(cert => {
+        return contentType === 'path' ? cert.path_id === contentId : cert.course_id === contentId
+      })
+
+      if (hasExisting) {
+        return null // Certificate already issued
+      }
+
+      // Check if content is actually completed
+      const isCompleted = contentType === 'path' 
+        ? await this.checkPathCompletion(userId, contentId)
+        : await this.checkCourseCompletion(userId, contentId)
+
+      if (isCompleted) {
+        return await this.issueCertificate(userId, contentId, contentType)
+      }
+
+      return null
+    } catch (error) {
+      handleError('autoIssueCertificateOnCompletion', error)
+      return null
+    }
+  }
+
+  /**
+   * Check if user has completed a course (all modules and lessons completed)
+   */
+  static async checkCourseCompletion(userId: string, courseId: string): Promise<boolean> {
+    try {
+      if (!validateSupabase()) return false
+
+      // Get all published modules in the course
+      const { data: modules, error: modulesError } = await supabase
+        .from('modules')
+        .select('id')
+        .eq('course_id', courseId)
+        .eq('status', 'published')
+
+      if (modulesError || !modules) {
+        return false
+      }
+
+      if (modules.length === 0) {
+        return false // Course has no modules
+      }
+
+      const moduleIds = modules.map((m: { id: string }) => m.id)
+
+      // Get all published lessons in these modules
+      const { data: lessons, error: lessonsError } = await supabase
+        .from('lessons')
+        .select('id')
+        .in('module_id', moduleIds)
+        .eq('status', 'published')
+
+      if (lessonsError || !lessons) {
+        return false
+      }
+
+      if (lessons.length === 0) {
+        return false // Modules have no lessons
+      }
+
+      const lessonIds = lessons.map((l: { id: string }) => l.id)
+
+      // Check user progress for all lessons
+      const { data: progress, error: progressError } = await supabase
+        .from('user_progress')
+        .select('lesson_id, status')
+        .eq('user_id', userId)
+        .in('lesson_id', lessonIds)
+        .eq('status', 'completed')
+
+      if (progressError) {
+        return false
+      }
+
+      // User has completed the course if they completed all required lessons
+      return (progress?.length || 0) === lessonIds.length
+    } catch (error) {
+      handleError('checkCourseCompletion', error)
+      return false
     }
   }
 

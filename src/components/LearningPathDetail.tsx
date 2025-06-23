@@ -8,10 +8,11 @@ import { useAuth } from '@/contexts/AuthContext'
 import type { LearningPath, Course, Module, Lesson, UserProgress } from '@/types/content'
 
 interface LearningPathDetailProps {
-  pathId: string
+  pathSlug?: string
+  pathId?: string
 }
 
-export function LearningPathDetail({ pathId }: LearningPathDetailProps) {
+export function LearningPathDetail({ pathSlug, pathId }: LearningPathDetailProps) {
   const [path, setPath] = useState<LearningPath | null>(null)
   const [courses, setCourses] = useState<Course[]>([])
   const [loading, setLoading] = useState(true)
@@ -28,16 +29,20 @@ export function LearningPathDetail({ pathId }: LearningPathDetailProps) {
         setLoading(true)
         setError(null)
 
-        const [pathData, coursesData] = await Promise.all([
-          ContentService.getLearningPath(pathId),
-          ContentService.getCourses(pathId)
-        ])
-
-        if (!isMounted) return // Prevent state updates if component unmounted
+        // Load path data using slug or id
+        const pathData = pathSlug 
+          ? await ContentService.getLearningPathBySlug(pathSlug)
+          : pathId 
+          ? await ContentService.getLearningPath(pathId)
+          : null
 
         if (!pathData) {
           throw new Error('Learning path not found')
         }
+
+        const coursesData = await ContentService.getCourses(pathData.id)
+
+        if (!isMounted) return // Prevent state updates if component unmounted
 
         setPath(pathData)
         setCourses(coursesData.filter(c => c.status === 'published'))
@@ -58,7 +63,7 @@ export function LearningPathDetail({ pathId }: LearningPathDetailProps) {
     return () => {
       isMounted = false
     }
-  }, [pathId])
+  }, [pathSlug, pathId])
 
   const getDifficultyColor = (difficulty: string) => {
     switch (difficulty) {

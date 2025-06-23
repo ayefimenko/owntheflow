@@ -1,12 +1,14 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useAuth } from '@/contexts/AuthContext'
 import RoleBadge from './RoleBadge'
 // Permission guards available if needed
 // import { AdminOnly, ContentManagerOnly } from './PermissionGuard'
 import { ROLE_PERMISSIONS } from '@/types/auth'
 import { DatabaseService } from '@/lib/database'
+import { ContentService } from '@/lib/content'
+import type { UserXP, XPLevel, UserLearningStats } from '@/types/content'
 
 export default function UserProfile() {
   const { user, userProfile, signOut, isRole } = useAuth()
@@ -14,11 +16,41 @@ export default function UserProfile() {
   const [displayName, setDisplayName] = useState(userProfile?.display_name || '')
   const [bio, setBio] = useState(userProfile?.bio || '')
   const [saving, setSaving] = useState(false)
+  
+  // Sprint 6: XP and progress tracking
+  const [userXP, setUserXP] = useState<UserXP | null>(null)
+  const [userStats, setUserStats] = useState<UserLearningStats | null>(null)
+  const [xpLevels, setXpLevels] = useState<XPLevel[]>([])
+  const [showLevelUpModal, setShowLevelUpModal] = useState(false)
+  const [newLevelAchieved, setNewLevelAchieved] = useState<XPLevel | null>(null)
 
   // Component state logging only in development
   if (process.env.NODE_ENV === 'development') {
     console.log('UserProfile render - user:', user?.email || 'none', 'profile:', userProfile?.role || 'none')
   }
+
+  // Load XP data when user is authenticated
+  useEffect(() => {
+    async function loadXPData() {
+      if (!user) return
+
+      try {
+        const [xpData, statsData, levelsData] = await Promise.all([
+          ContentService.getUserXP(user.id),
+          ContentService.getUserLearningStats(user.id),
+          ContentService.getXPLevels()
+        ])
+
+        setUserXP(xpData)
+        setUserStats(statsData)
+        setXpLevels(levelsData)
+      } catch (error) {
+        console.error('Error loading XP data:', error)
+      }
+    }
+
+    loadXPData()
+  }, [user])
 
   const handleSave = async () => {
     if (!user) {
@@ -48,6 +80,43 @@ export default function UserProfile() {
       await signOut()
     } catch (error) {
       console.error('Error during sign out:', error)
+    }
+  }
+
+  // Get current level details
+  const getCurrentLevel = () => {
+    if (!userXP || !xpLevels.length) return null
+    return xpLevels.find(level => level.level_id === userXP.level_id) || xpLevels[0]
+  }
+
+  // Get next level details  
+  const getNextLevel = () => {
+    if (!userXP || !xpLevels.length) return null
+    const nextLevelId = userXP.level_id + 1
+    return xpLevels.find(level => level.level_id === nextLevelId) || null
+  }
+
+  // Calculate progress to next level
+  const getXPProgress = () => {
+    if (!userXP || !xpLevels.length) return { current: 0, needed: 100, percentage: 0 }
+    
+    const currentLevel = getCurrentLevel()
+    const nextLevel = getNextLevel()
+    
+    if (!currentLevel || !nextLevel) {
+      return { current: userXP.total_xp, needed: userXP.total_xp, percentage: 100 }
+    }
+
+    const currentLevelXP = currentLevel.xp_required
+    const nextLevelXP = nextLevel.xp_required
+    const progressXP = userXP.total_xp - currentLevelXP
+    const neededXP = nextLevelXP - currentLevelXP
+    const percentage = Math.min(100, Math.max(0, (progressXP / neededXP) * 100))
+
+    return { 
+      current: progressXP, 
+      needed: neededXP, 
+      percentage: Math.round(percentage) 
     }
   }
 
@@ -83,6 +152,9 @@ export default function UserProfile() {
   const userPermissions = ROLE_PERMISSIONS[userProfile.role] || []
   const isAdmin = isRole('admin')
   const isContentManager = isRole('content_manager')
+  const currentLevel = getCurrentLevel()
+  const nextLevel = getNextLevel()
+  const xpProgress = getXPProgress()
 
   // Profile rendering complete
 
@@ -93,7 +165,7 @@ export default function UserProfile() {
         <div className="text-center mb-6">
           <div className="w-20 h-20 bg-gradient-to-br from-blue-100 to-indigo-200 rounded-full flex items-center justify-center mx-auto mb-4">
             <span className="text-3xl">
-              {userProfile.role === 'admin' ? '👑' : userProfile.role === 'content_manager' ? '✏️' : '🎓'}
+              {userProfile.role === 'admin' ? '👑' : userProfile.role === 'content_manager' ? '✏️' : currentLevel?.badge_icon || '🎓'}
             </span>
           </div>
           
@@ -103,11 +175,73 @@ export default function UserProfile() {
             </h2>
             <RoleBadge role={userProfile.role} />
           </div>
+
+          {/* XP Title Display */}
+          {currentLevel && (
+            <div className="flex items-center justify-center gap-2 mb-2">
+              <span className="text-lg font-semibold" style={{ color: currentLevel.badge_color }}>
+                {currentLevel.badge_icon} {currentLevel.title}
+              </span>
+              <span className="text-sm text-gray-500">Level {userXP?.level_id}</span>
+            </div>
+          )}
           
           <p className="text-gray-600">
             {userProfile.bio || 'Learning to own the flow! 🌊'}
           </p>
         </div>
+
+                {/* XP Progress Section */}
+        {userStats && userXP && (
+          <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg p-6 mb-6">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-gray-900">Learning Progress</h3>
+              <div className="text-right">
+                 <div className="text-2xl font-bold text-blue-600">{userXP.total_xp}</div>
+                 <div className="text-sm text-gray-600">Total XP</div>
+               </div>
+            </div>
+
+            {/* Progress Bar */}
+            {nextLevel && (
+              <div className="mb-4">
+                <div className="flex justify-between text-sm text-gray-600 mb-2">
+                  <span>Progress to {nextLevel.title}</span>
+                  <span>{xpProgress.current}/{xpProgress.needed} XP</span>
+                </div>
+                <div className="w-full bg-gray-200 rounded-full h-3">
+                  <div 
+                    className="bg-gradient-to-r from-blue-500 to-indigo-600 h-3 rounded-full transition-all duration-300"
+                    style={{ width: `${xpProgress.percentage}%` }}
+                  ></div>
+                </div>
+                <div className="text-center mt-2 text-sm text-gray-600">
+                  {xpProgress.percentage}% to next level
+                </div>
+              </div>
+            )}
+
+            {/* Learning Stats Grid */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div className="text-center">
+                <div className="text-xl font-bold text-green-600">{userStats.lessons_completed}</div>
+                <div className="text-xs text-gray-600">Lessons</div>
+              </div>
+              <div className="text-center">
+                <div className="text-xl font-bold text-purple-600">{userStats.courses_completed}</div>
+                <div className="text-xs text-gray-600">Courses</div>
+              </div>
+              <div className="text-center">
+                <div className="text-xl font-bold text-orange-600">{userStats.challenges_completed}</div>
+                <div className="text-xs text-gray-600">Challenges</div>
+              </div>
+              <div className="text-center">
+                <div className="text-xl font-bold text-yellow-600">{userStats.certificates_earned}</div>
+                <div className="text-xs text-gray-600">Certificates</div>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Edit Profile Section */}
         <div className="border-t pt-6">

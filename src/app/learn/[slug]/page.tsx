@@ -10,42 +10,43 @@ interface Props {
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { slug } = await params
   
-  // Get all published learning paths to find the one with this slug
-  const paths = await ContentService.getLearningPaths({ 
-    status: ['published' as const] 
-  })
-  
-  const path = paths.find(p => p.slug === slug)
-  
-  if (!path) {
-    return {
-      title: 'Learning Path Not Found - Own The Flow'
+  try {
+    const path = await ContentService.getLearningPathBySlug(slug)
+    
+    if (!path || path.status !== 'published') {
+      return {
+        title: 'Learning Path Not Found - Own The Flow',
+      }
     }
-  }
 
-  return {
-    title: `${path.title} - Own The Flow`,
-    description: path.short_description || path.description || `Learn ${path.title} with Own The Flow`,
+    return {
+      title: `${path.title} - Own The Flow`,
+      description: path.short_description || path.description,
+    }
+  } catch (error) {
+    return {
+      title: 'Learning Path Not Found - Own The Flow',
+    }
   }
 }
 
 export default async function LearningPathPage({ params }: Props) {
   const { slug } = await params
   
-  // Get all published learning paths to find the one with this slug
-  const paths = await ContentService.getLearningPaths({ 
-    status: ['published' as const] 
-  })
-  
-  const path = paths.find(p => p.slug === slug)
-  
-  if (!path) {
+  try {
+    const path = await ContentService.getLearningPathBySlug(slug)
+    
+    if (!path || path.status !== 'published') {
+      notFound()
+    }
+
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <LearningPathDetail pathSlug={slug} />
+      </div>
+    )
+  } catch (error) {
+    console.error('Error loading learning path:', error)
     notFound()
   }
-
-  return (
-    <div className="min-h-screen bg-gray-50">
-      <LearningPathDetail pathId={path.id} />
-    </div>
-  )
 } 

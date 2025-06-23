@@ -200,6 +200,62 @@ export class AIService {
     }
   }
 
+  // Score text-based quiz answers using AI (Sprint 6: Quiz Engine)
+  static async scoreTextAnswer(
+    question: string, 
+    userAnswer: string, 
+    expectedAnswer: string, 
+    rubric: string = 'Rate this answer on accuracy and completeness (0-100)'
+  ): Promise<number> {
+    const client = this.initClient()
+    if (!client) {
+      throw new Error('AI service not available')
+    }
+
+    try {
+      const response = await client.chat.completions.create({
+        model: 'gpt-4o',
+        messages: [
+          {
+            role: 'system',
+            content: `You are an expert educator scoring quiz answers. Evaluate the user's answer against the expected answer using the provided rubric. 
+            
+            Return ONLY a number between 0-100 representing the score. Consider:
+            - Accuracy of information (40%)
+            - Completeness of response (30%) 
+            - Understanding demonstrated (20%)
+            - Clarity of explanation (10%)
+            
+            Be fair but thorough in your evaluation.`
+          },
+          {
+            role: 'user',
+            content: `Question: ${question}
+
+Expected Answer: ${expectedAnswer}
+
+User's Answer: ${userAnswer}
+
+Rubric: ${rubric}
+
+Score (0-100):`
+          }
+        ],
+        max_tokens: 50,
+        temperature: 0.1 // Low temperature for consistent scoring
+      })
+
+      const scoreText = response.choices[0]?.message?.content?.trim() || '0'
+      const score = parseInt(scoreText.replace(/[^0-9]/g, '')) || 0
+      
+      // Ensure score is within valid range
+      return Math.min(100, Math.max(0, score))
+    } catch (error) {
+      console.error('Failed to score text answer:', error)
+      throw error
+    }
+  }
+
   // Suggest lesson improvements
   static async suggestImprovements(content: string): Promise<string[] | null> {
     const client = this.initClient()

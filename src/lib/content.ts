@@ -265,6 +265,40 @@ export class ContentService {
     }
   }
 
+  static async getLearningPathBySlug(slug: string): Promise<LearningPath | null> {
+    try {
+      if (!validateSupabase()) return null
+
+      const cacheKey = `learning_path_slug_${slug}`
+      
+      return await withCache(cacheKey, async () => {
+        const { data, error } = await supabase
+          .from('learning_paths')
+          .select(`
+            *,
+            courses:courses(
+              *,
+              modules:modules(
+                *,
+                lessons:lessons(*)
+              )
+            )
+          `)
+          .eq('slug', slug)
+          .maybeSingle()
+
+        if (error) {
+          throw new Error(`Failed to fetch learning path: ${error.message}`)
+        }
+
+        return data
+      })
+    } catch (error) {
+      handleError('getLearningPathBySlug', error)
+      return null
+    }
+  }
+
   static async createLearningPath(data: CreateLearningPathDto): Promise<LearningPath | null> {
     try {
       if (!validateSupabase()) return null
@@ -1294,6 +1328,71 @@ export class ContentService {
   }
 
   // ============================================================================
+  // CHALLENGES (SPRINT 6)
+  // ============================================================================
+
+  static async getChallenges(lessonId?: string): Promise<Challenge[]> {
+    try {
+      if (!validateSupabase()) return []
+
+      const cacheKey = `challenges_${lessonId || 'all'}`
+      
+      return await withCache(cacheKey, async () => {
+        let query = supabase
+          .from('challenges')
+          .select(`
+            *,
+            lesson:lessons(title)
+          `)
+          .order('sort_order', { ascending: true })
+
+        if (lessonId) {
+          query = query.eq('lesson_id', lessonId)
+        }
+
+        const { data, error } = await query
+
+        if (error) {
+          throw new Error(`Failed to fetch challenges: ${error.message}`)
+        }
+
+        return data || []
+      })
+    } catch (error) {
+      handleError('getChallenges', error)
+      return []
+    }
+  }
+
+  static async getChallenge(id: string): Promise<Challenge | null> {
+    try {
+      if (!validateSupabase()) return null
+
+      const cacheKey = `challenge_${id}`
+      
+      return await withCache(cacheKey, async () => {
+        const { data, error } = await supabase
+          .from('challenges')
+          .select(`
+            *,
+            lesson:lessons(title)
+          `)
+          .eq('id', id)
+          .single()
+
+        if (error) {
+          throw new Error(`Failed to fetch challenge: ${error.message}`)
+        }
+
+        return data
+      })
+    } catch (error) {
+      handleError('getChallenge', error)
+      return null
+    }
+  }
+
+  // ============================================================================
   // PROGRESS TRACKING
   // ============================================================================
 
@@ -1571,8 +1670,6 @@ export class ContentService {
           lessons_completed: 0,
           challenges_completed: 0,
           certificates_earned: 0,
-          current_streak: 0,
-          longest_streak: 0,
           total_study_time: 0
         }
       }
@@ -1598,14 +1695,12 @@ export class ContentService {
 
         return {
           total_xp: xpData?.total_xp || 0,
-          current_level: xpData?.current_level || 1,
+          current_level: xpData?.level_id || 1,
           paths_completed: completedProgress.filter((p: any) => p.content_type === 'path').length,
           courses_completed: completedProgress.filter((p: any) => p.content_type === 'course').length,
           lessons_completed: completedProgress.filter((p: any) => p.content_type === 'lesson').length,
           challenges_completed: completedProgress.filter((p: any) => p.content_type === 'challenge').length,
           certificates_earned: certificatesCount,
-          current_streak: xpData?.current_streak || 0,
-          longest_streak: xpData?.longest_streak || 0,
           total_study_time: progressData.reduce((total: number, p: any) => total + (p.time_spent || 0), 0)
         }
       }, CACHE_TTL.CONTENT / 2) // Shorter cache for user stats
@@ -1619,8 +1714,6 @@ export class ContentService {
         lessons_completed: 0,
         challenges_completed: 0,
         certificates_earned: 0,
-        current_streak: 0,
-        longest_streak: 0,
         total_study_time: 0
       }
     }

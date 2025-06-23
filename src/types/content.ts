@@ -183,9 +183,9 @@ export interface UserXP {
   id: string
   user_id: string
   total_xp: number
-  current_level: number
-  current_streak: number
-  longest_streak: number
+  level_id: number
+  current_title: string
+  path_xp: Record<string, number>
   created_at: string
   updated_at: string
 }
@@ -354,8 +354,6 @@ export interface UserLearningStats {
   lessons_completed: number
   challenges_completed: number
   certificates_earned: number
-  current_streak: number
-  longest_streak: number
   total_study_time: number // minutes
 }
 

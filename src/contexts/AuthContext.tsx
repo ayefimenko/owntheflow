@@ -115,7 +115,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [])
 
   const signUp = async (email: string, password: string, fullName: string) => {
-    setLoading(true)
     try {
       if (!supabase?.auth) {
         console.error('AuthContext: Supabase auth not available')
@@ -143,22 +142,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       })
 
       if (error) {
-        console.error('AuthContext: Signup error:', error.message)
+        // Return error without logging - let the UI component handle display
         return { error }
       }
 
       console.log('AuthContext: Signup successful!')
       return { data }
     } catch (error: any) {
-      console.error('AuthContext: Signup exception:', error)
+      // Return error without logging - let the UI component handle display
       return { error: { message: error?.message || 'Unknown signup error' } }
-    } finally {
-      setLoading(false)
     }
   }
 
   const signIn = async (email: string, password: string) => {
-    setLoading(true)
     try {
       if (!supabase?.auth) {
         return { error: { message: 'Authentication service not available' } }
@@ -171,17 +167,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       })
 
       if (error) {
-        console.error('AuthContext: Sign in error:', error.message)
+        // Return error without logging - let the UI component handle display
         return { error }
       }
 
       console.log('AuthContext: Sign in successful:', { hasUser: !!data?.user, hasSession: !!data?.session })
       return { data }
     } catch (error: any) {
-      console.error('Signin exception:', error)
+      // Return error without logging - let the UI component handle display
       return { error: { message: error?.message || 'Unknown signin error' } }
-    } finally {
-      setLoading(false)
     }
   }
 
@@ -206,7 +200,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }
 
   const resendConfirmation = async (email: string) => {
-    setLoading(true)
     try {
       if (!supabase?.auth) {
         console.error('AuthContext: Supabase auth not available')
@@ -235,8 +228,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } catch (error: any) {
       console.error('AuthContext: Resend confirmation exception:', error)
       return { error: { message: error?.message || 'Unknown resend error' } }
-    } finally {
-      setLoading(false)
     }
   }
 

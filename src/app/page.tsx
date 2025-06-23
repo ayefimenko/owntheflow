@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import Link from 'next/link'
 import { useAuth } from '@/contexts/AuthContext'
 import AuthForm from '@/components/AuthForm'
 import UserProfile from '@/components/UserProfile'
@@ -274,6 +275,15 @@ export default function Home() {
               >
                 Sign In
               </button>
+            </div>
+            
+            <div className="mt-8">
+              <Link
+                href="/learn"
+                className="inline-block text-blue-600 hover:text-blue-700 font-medium text-lg"
+              >
+                📚 Browse Learning Paths →
+              </Link>
             </div>
           </div>
 

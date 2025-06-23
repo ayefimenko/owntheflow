@@ -7,20 +7,17 @@ export class AIService {
   // Initialize OpenAI client
   private static initClient(): OpenAI | null {
     try {
-      // Check if API key is available
-      const apiKey = process.env.NEXT_PUBLIC_OPENAI_API_KEY || process.env.OPENAI_API_KEY
-      
+      // Only use server-side API key - NEVER expose to client
+      const apiKey = process.env.OPENAI_API_KEY // Remove NEXT_PUBLIC_ prefix
+
       if (!apiKey) {
         console.warn('OpenAI API key not found. AI features will be disabled.')
         return null
       }
 
-      if (!this.client) {
-        this.client = new OpenAI({
-          apiKey,
-          dangerouslyAllowBrowser: true // For client-side usage
-        })
-      }
+      this.client = new OpenAI({
+        apiKey,
+      })
 
       return this.client
     } catch (error) {

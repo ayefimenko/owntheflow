@@ -357,4 +357,38 @@ export interface UserLearningStats {
   current_streak: number
   longest_streak: number
   total_study_time: number // minutes
+}
+
+// Error handling types
+export interface ServiceError {
+  code: string
+  message: string
+  details?: any
+  operation?: string
+}
+
+export interface ValidationError extends ServiceError {
+  field?: string
+  value?: any
+}
+
+export interface ApiResponse<T> {
+  data?: T
+  error?: ServiceError
+  success: boolean
+}
+
+// Rate limiting types
+export interface RateLimitResult {
+  allowed: boolean
+  remaining: number
+  resetTime: number
+}
+
+// Enhanced auth types
+export interface AuthContext {
+  user: any | null // Use any for now to avoid circular imports
+  userProfile: any | null // Use any for now to avoid circular imports
+  loading: boolean
+  hydrated: boolean
 } 

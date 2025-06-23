@@ -21,6 +21,8 @@ export function LearningPathDetail({ pathId }: LearningPathDetailProps) {
   const router = useRouter()
 
   useEffect(() => {
+    let isMounted = true
+    
     async function loadPathDetails() {
       try {
         setLoading(true)
@@ -31,6 +33,8 @@ export function LearningPathDetail({ pathId }: LearningPathDetailProps) {
           ContentService.getCourses(pathId)
         ])
 
+        if (!isMounted) return // Prevent state updates if component unmounted
+
         if (!pathData) {
           throw new Error('Learning path not found')
         }
@@ -38,14 +42,22 @@ export function LearningPathDetail({ pathId }: LearningPathDetailProps) {
         setPath(pathData)
         setCourses(coursesData.filter(c => c.status === 'published'))
       } catch (err) {
+        if (!isMounted) return
+        
         console.error('Error loading path details:', err)
         setError('Failed to load learning path details. Please try again.')
       } finally {
-        setLoading(false)
+        if (isMounted) {
+          setLoading(false)
+        }
       }
     }
 
     loadPathDetails()
+    
+    return () => {
+      isMounted = false
+    }
   }, [pathId])
 
   const getDifficultyColor = (difficulty: string) => {

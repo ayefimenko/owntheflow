@@ -25,6 +25,53 @@ import type {
   UserLearningStats
 } from '@/types/content'
 
+// Input validation and sanitization helpers
+function validateString(value: any, minLength: number = 1, maxLength: number = 255): string {
+  if (typeof value !== 'string') {
+    throw new Error('Value must be a string')
+  }
+  
+  const trimmed = value.trim()
+  if (trimmed.length < minLength) {
+    throw new Error(`Value must be at least ${minLength} characters`)
+  }
+  if (trimmed.length > maxLength) {
+    throw new Error(`Value must be no more than ${maxLength} characters`)
+  }
+  
+  return trimmed
+}
+
+function validateEmail(email: string): string {
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+  const trimmed = email.trim().toLowerCase()
+  
+  if (!emailRegex.test(trimmed)) {
+    throw new Error('Invalid email format')
+  }
+  
+  return trimmed
+}
+
+function validateUUID(id: string): string {
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+  
+  if (!uuidRegex.test(id)) {
+    throw new Error('Invalid UUID format')
+  }
+  
+  return id
+}
+
+function sanitizeHTML(html: string): string {
+  // Basic HTML sanitization - in production, use a proper library like DOMPurify
+  return html
+    .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
+    .replace(/<iframe\b[^<]*(?:(?!<\/iframe>)<[^<]*)*<\/iframe>/gi, '')
+    .replace(/javascript:/gi, '')
+    .replace(/on\w+=/gi, '')
+}
+
 // Cache for frequently accessed data
 const cache = new Map<string, { data: any; timestamp: number; ttl: number }>()
 
@@ -75,23 +122,56 @@ function clearCache(pattern?: string) {
   }
 }
 
-// Helper function to validate Supabase availability
+// Basic rate limiting for client-side operations
+class RateLimiter {
+  private requests: Map<string, number[]> = new Map()
+  private readonly maxRequests: number = 30 // requests per minute
+  private readonly windowMs: number = 60 * 1000 // 1 minute
+
+  canMakeRequest(key: string): boolean {
+    const now = Date.now()
+    const requests = this.requests.get(key) || []
+    
+    // Remove old requests outside the window
+    const recentRequests = requests.filter(time => now - time < this.windowMs)
+    
+    if (recentRequests.length >= this.maxRequests) {
+      return false
+    }
+    
+    recentRequests.push(now)
+    this.requests.set(key, recentRequests)
+    return true
+  }
+}
+
+const rateLimiter = new RateLimiter()
+
+// Enhanced error handling
+function handleError(operation: string, error: any): void {
+  const isDevelopment = process.env.NODE_ENV === 'development'
+  
+  // Log full error details only in development
+  if (isDevelopment) {
+    console.error(`ContentService.${operation}:`, error)
+  } else {
+    // In production, log only safe information
+    console.error(`ContentService operation failed: ${operation}`)
+  }
+  
+  // TODO: In production, send error to monitoring service
+  // Example: Sentry.captureException(error, { tags: { operation } })
+}
+
+// Database connection validation
 function validateSupabase(): boolean {
-  if (!supabase?.from) {
-    console.warn('Content service not available')
+  if (!supabase) {
+    if (process.env.NODE_ENV === 'development') {
+      console.warn('Supabase client not initialized')
+    }
     return false
   }
   return true
-}
-
-// Helper function to handle common errors
-function handleError(operation: string, error: any): void {
-  console.error(`Error in ${operation}:`, error.message || error)
-  
-  // In production, you might want to send to error tracking service
-  if (process.env.NODE_ENV === 'production') {
-    // Example: logErrorToService(operation, error)
-  }
 }
 
 export class ContentService {
@@ -1558,11 +1638,6 @@ export class ContentService {
     try {
       if (!validateSupabase()) return null
 
-      console.log('🔍 getFirstLessonInPath: Starting search for path:', pathId)
-
-      // Add debug check to see ALL content (including drafts)
-      await this.debugContentStructure(pathId)
-
       // Get the first published course in the learning path
       const { data: courses, error: coursesError } = await supabase
         .from('courses')
@@ -1572,20 +1647,16 @@ export class ContentService {
         .order('sort_order')
         .limit(1)
 
-      console.log('🔍 Found courses:', courses, 'Error:', coursesError)
-
       if (coursesError) {
-        console.error('❌ Error fetching courses:', coursesError)
+        console.error('Error fetching courses:', coursesError.message)
         return null
       }
 
       if (!courses || courses.length === 0) {
-        console.log('❌ No published courses found in learning path:', pathId)
         return null
       }
 
       const firstCourse = courses[0]
-      console.log('✅ Found first published course:', firstCourse.title, firstCourse.id)
 
       // Get the first published module in the course
       const { data: modules, error: modulesError } = await supabase
@@ -1596,20 +1667,16 @@ export class ContentService {
         .order('sort_order')
         .limit(1)
 
-      console.log('🔍 Found modules:', modules, 'Error:', modulesError)
-
       if (modulesError) {
-        console.error('❌ Error fetching modules:', modulesError)
+        console.error('Error fetching modules:', modulesError.message)
         return null
       }
 
       if (!modules || modules.length === 0) {
-        console.log('❌ No published modules found in course:', firstCourse.id)
         return null
       }
 
       const firstModule = modules[0]
-      console.log('✅ Found first published module:', firstModule.title, firstModule.id)
 
       // Get the first published lesson in the module
       const { data: lessons, error: lessonsError } = await supabase
@@ -1620,29 +1687,22 @@ export class ContentService {
         .order('sort_order')
         .limit(1)
 
-      console.log('🔍 Found lessons:', lessons, 'Error:', lessonsError)
-
       if (lessonsError) {
-        console.error('❌ Error fetching lessons:', lessonsError)
+        console.error('Error fetching lessons:', lessonsError.message)
         return null
       }
 
       if (!lessons || lessons.length === 0) {
-        console.log('❌ No published lessons found in module:', firstModule.id)
         return null
       }
 
-      const firstLesson = lessons[0]
-      console.log('🎉 Found first published lesson:', firstLesson.title, firstLesson.id)
-
       return {
-        lesson: firstLesson,
+        lesson: lessons[0],
         courseId: firstCourse.id,
         moduleId: firstModule.id
       }
-
     } catch (error) {
-      console.error('❌ Error in getFirstLessonInPath:', error)
+      handleError('getFirstLessonInPath', error)
       return null
     }
   }
@@ -1998,50 +2058,4 @@ export class ContentService {
     }
   }
 
-  /**
-   * Debug method to check content structure (including drafts)
-   */
-  static async debugContentStructure(pathId: string): Promise<any> {
-    try {
-      if (!validateSupabase()) return null
-
-      console.log('🔍 DEBUG: Checking content structure for path:', pathId)
-
-      // Get ALL courses (including drafts)
-      const { data: courses, error: coursesError } = await supabase
-        .from('courses')
-        .select('id, title, status, sort_order')
-        .eq('path_id', pathId)
-        .order('sort_order')
-
-      console.log('🔍 DEBUG: All courses (including drafts):', courses, 'Error:', coursesError)
-
-      if (courses && courses.length > 0) {
-        // Check modules for first course
-        const { data: modules, error: modulesError } = await supabase
-          .from('modules')
-          .select('id, title, status, sort_order')
-          .eq('course_id', courses[0].id)
-          .order('sort_order')
-
-        console.log('🔍 DEBUG: All modules in first course (including drafts):', modules, 'Error:', modulesError)
-
-        if (modules && modules.length > 0) {
-          // Check lessons for first module
-          const { data: lessons, error: lessonsError } = await supabase
-            .from('lessons')
-            .select('id, title, status, sort_order')
-            .eq('module_id', modules[0].id)
-            .order('sort_order')
-
-          console.log('🔍 DEBUG: All lessons in first module (including drafts):', lessons, 'Error:', lessonsError)
-        }
-      }
-
-      return { courses, modules: null, lessons: null }
-    } catch (error) {
-      console.error('🔍 DEBUG: Error in debugContentStructure:', error)
-      return null
-    }
-  }
 } 

@@ -67,28 +67,57 @@ export default function ContentDashboard() {
     setLoading(true)
     setError(null)
     try {
-      const [statsData, pathsData, coursesData, modulesData, lessonsData, challengesData] = await Promise.all([
+      // Always load stats and paths for overview
+      const [statsData, pathsData] = await Promise.all([
         ContentService.getContentStats(),
-        ContentService.getLearningPaths({ limit: 10 }),
-        ContentService.getCourses(),
-        ContentService.getModules(),
-        ContentService.getLessons(),
-        ContentService.getChallenges()
+        ContentService.getLearningPaths({ limit: 10 })
       ])
       
       setStats(statsData)
       setPaths(pathsData)
-      setCourses(coursesData)
-      setModules(modulesData)
-      setLessons(lessonsData)
-      setChallenges(challengesData)
+      
+      // Load specific data based on active tab
+      switch (activeTab) {
+        case 'overview':
+          // For overview, load minimal additional data
+          break
+        case 'courses':
+          const coursesData = await ContentService.getCourses()
+          setCourses(coursesData)
+          break
+        case 'modules':
+          const modulesData = await ContentService.getModules()
+          setModules(modulesData)
+          break
+        case 'lessons':
+          const lessonsData = await ContentService.getLessons()
+          setLessons(lessonsData)
+          break
+        case 'challenges':
+          const challengesData = await ContentService.getChallenges()
+          setChallenges(challengesData)
+          break
+        case 'curriculum':
+          // Load all data for curriculum view
+          const [coursesAll, modulesAll, lessonsAll, challengesAll] = await Promise.all([
+            ContentService.getCourses(),
+            ContentService.getModules(),
+            ContentService.getLessons(),
+            ContentService.getChallenges()
+          ])
+          setCourses(coursesAll)
+          setModules(modulesAll)
+          setLessons(lessonsAll)
+          setChallenges(challengesAll)
+          break
+      }
     } catch (error) {
       console.error('Error loading dashboard data:', error)
       setError(error instanceof Error ? error.message : 'Failed to load dashboard data')
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [activeTab]) // Add activeTab dependency
 
   useEffect(() => {
     loadDashboardData()

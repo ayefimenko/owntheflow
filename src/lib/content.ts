@@ -1327,80 +1327,17 @@ export class ContentService {
     }
   }
 
-  // ============================================================================
-  // CHALLENGES (SPRINT 6)
-  // ============================================================================
 
-  static async getChallenges(lessonId?: string): Promise<Challenge[]> {
-    try {
-      if (!validateSupabase()) return []
-
-      const cacheKey = `challenges_${lessonId || 'all'}`
-      
-      return await withCache(cacheKey, async () => {
-        let query = supabase
-          .from('challenges')
-          .select(`
-            *,
-            lesson:lessons(title)
-          `)
-          .order('sort_order', { ascending: true })
-
-        if (lessonId) {
-          query = query.eq('lesson_id', lessonId)
-        }
-
-        const { data, error } = await query
-
-        if (error) {
-          throw new Error(`Failed to fetch challenges: ${error.message}`)
-        }
-
-        return data || []
-      })
-    } catch (error) {
-      handleError('getChallenges', error)
-      return []
-    }
-  }
-
-  static async getChallenge(id: string): Promise<Challenge | null> {
-    try {
-      if (!validateSupabase()) return null
-
-      const cacheKey = `challenge_${id}`
-      
-      return await withCache(cacheKey, async () => {
-        const { data, error } = await supabase
-          .from('challenges')
-          .select(`
-            *,
-            lesson:lessons(title)
-          `)
-          .eq('id', id)
-          .single()
-
-        if (error) {
-          throw new Error(`Failed to fetch challenge: ${error.message}`)
-        }
-
-        return data
-      })
-    } catch (error) {
-      handleError('getChallenge', error)
-      return null
-    }
-  }
 
   // ============================================================================
   // PROGRESS TRACKING
   // ============================================================================
 
-  static async getUserProgress(userId: string, contentId?: string): Promise<UserProgress[]> {
+  static async getUserProgress(userId: string, contentId?: string, contentType?: 'path' | 'course' | 'module' | 'lesson' | 'challenge'): Promise<UserProgress[]> {
     try {
       if (!validateSupabase()) return []
 
-      const cacheKey = `user_progress_${userId}_${contentId || 'all'}`
+      const cacheKey = `user_progress_${userId}_${contentId || 'all'}_${contentType || 'all'}`
       
       return await withCache(cacheKey, async () => {
         let query = supabase
@@ -1408,8 +1345,9 @@ export class ContentService {
           .select('*')
           .eq('user_id', userId)
 
-        if (contentId) {
-          query = query.eq('content_id', contentId)
+        if (contentId && contentType) {
+          const contentColumn = `${contentType === 'path' ? 'path' : contentType}_id`
+          query = query.eq(contentColumn, contentId)
         }
 
         const { data, error } = await query
@@ -1435,15 +1373,20 @@ export class ContentService {
     try {
       if (!validateSupabase()) return null
 
+      // Map content type to the correct column name
+      const contentColumn = `${contentType === 'path' ? 'path' : contentType}_id`
+      
+      // Create progress record with the correct column structure
+      const progressData: any = {
+        user_id: userId,
+        [contentColumn]: contentId,
+        ...data,
+        updated_at: new Date().toISOString()
+      }
+
       const { data: result, error } = await supabase
         .from('user_progress')
-        .upsert({
-          user_id: userId,
-          content_id: contentId,
-          content_type: contentType,
-          ...data,
-          updated_at: new Date().toISOString()
-        })
+        .upsert(progressData)
         .select()
         .single()
 

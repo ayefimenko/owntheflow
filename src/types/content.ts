@@ -157,25 +157,29 @@ export interface Challenge {
 export interface UserProgress {
   id: string
   user_id: string
-  content_id: string
-  content_type: 'path' | 'course' | 'module' | 'lesson' | 'challenge'
+  
+  // Content IDs - only one should be set per record
+  path_id?: string
+  course_id?: string
+  module_id?: string
+  lesson_id?: string
+  challenge_id?: string
   
   // Progress data
   status: ProgressStatus
   completion_percentage: number
-  time_spent?: number // minutes
   
   // Timestamps
   started_at?: string
   completed_at?: string
+  last_accessed_at?: string
+  created_at: string
   updated_at: string
   
   // Scoring
   xp_earned: number
   score?: number
   attempts: number
-  
-  created_at: string
 }
 
 // User XP

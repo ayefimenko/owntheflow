@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { ContentService } from '@/lib/content'
 import { useAuth } from '@/contexts/AuthContext'
 import type { LearningPath, Course, Module, Lesson, UserProgress } from '@/types/content'
@@ -15,7 +16,9 @@ export function LearningPathDetail({ pathId }: LearningPathDetailProps) {
   const [courses, setCourses] = useState<Course[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [starting, setStarting] = useState(false)
   const { user } = useAuth()
+  const router = useRouter()
 
   useEffect(() => {
     async function loadPathDetails() {
@@ -145,18 +148,60 @@ export function LearningPathDetail({ pathId }: LearningPathDetailProps) {
             </div>
           )}
 
-          {user && (
+          {user ? (
             <div className="text-center">
               <button
                 type="button"
-                className="px-8 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-semibold"
-                onClick={() => {
-                  // TODO: Mark path as started and navigate to first lesson
-                  console.log('Starting learning path:', path.id)
+                disabled={starting}
+                className="px-8 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+                onClick={async () => {
+                  if (!user?.id || starting) return
+                  
+                  try {
+                    setStarting(true)
+                    setError(null) // Clear any previous errors
+                    console.log('🚀 Starting learning path:', path.id)
+                    
+                    const firstLessonData = await ContentService.startLearningPath(user.id, path.id)
+                    
+                    if (firstLessonData) {
+                      console.log('✅ Navigating to first lesson:', firstLessonData.lesson.id)
+                      router.push(`/learn/lesson/${firstLessonData.lesson.id}`)
+                    } else {
+                      console.error('❌ No content available in this learning path')
+                      setError('This learning path doesn\'t have any available content yet. Please check back later or contact support.')
+                    }
+                  } catch (error) {
+                    console.error('❌ Error starting learning path:', error)
+                    setError('Failed to start learning path. Please try again.')
+                  } finally {
+                    setStarting(false)
+                  }
                 }}
               >
-                🚀 Start Learning Path
+                {starting ? (
+                  <>
+                    <div className="inline-block animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                    Starting...
+                  </>
+                ) : (
+                  '🚀 Start Learning Path'
+                )}
               </button>
+            </div>
+          ) : (
+            <div className="text-center">
+              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-4">
+                <p className="text-yellow-800 text-sm">
+                  ⚠️ You need to sign in to start this learning path.
+                </p>
+              </div>
+              <Link
+                href="/?mode=signin"
+                className="px-8 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-semibold inline-block"
+              >
+                🔐 Sign In to Start Learning
+              </Link>
             </div>
           )}
         </div>

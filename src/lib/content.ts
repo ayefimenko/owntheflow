@@ -1547,6 +1547,107 @@ export class ContentService {
   }
 
   // ============================================================================
+  // LEARNING PATH NAVIGATION
+  // ============================================================================
+
+  /**
+   * Gets the first lesson in a learning path by traversing the hierarchy:
+   * Learning Path → First Course → First Module → First Lesson
+   */
+  static async getFirstLessonInPath(pathId: string): Promise<{ lesson: Lesson; courseId: string; moduleId: string } | null> {
+    try {
+      if (!validateSupabase()) return null
+
+      // Get the first published course in the learning path
+      const { data: courses, error: coursesError } = await supabase
+        .from('courses')
+        .select('id, title, order_index')
+        .eq('path_id', pathId)
+        .eq('status', 'published')
+        .order('order_index')
+        .limit(1)
+
+      if (coursesError || !courses || courses.length === 0) {
+        console.log('No published courses found in learning path:', pathId)
+        return null
+      }
+
+      const firstCourse = courses[0]
+
+      // Get the first published module in the first course
+      const { data: modules, error: modulesError } = await supabase
+        .from('modules')
+        .select('id, title, order_index')
+        .eq('course_id', firstCourse.id)
+        .eq('status', 'published')
+        .order('order_index')
+        .limit(1)
+
+      if (modulesError || !modules || modules.length === 0) {
+        console.log('No published modules found in course:', firstCourse.id)
+        return null
+      }
+
+      const firstModule = modules[0]
+
+      // Get the first published lesson in the first module
+      const { data: lessons, error: lessonsError } = await supabase
+        .from('lessons')
+        .select('*')
+        .eq('module_id', firstModule.id)
+        .eq('status', 'published')
+        .order('order_index')
+        .limit(1)
+
+      if (lessonsError || !lessons || lessons.length === 0) {
+        console.log('No published lessons found in module:', firstModule.id)
+        return null
+      }
+
+      const firstLesson = lessons[0]
+
+      return {
+        lesson: firstLesson,
+        courseId: firstCourse.id,
+        moduleId: firstModule.id
+      }
+    } catch (error) {
+      handleError('getFirstLessonInPath', error)
+      return null
+    }
+  }
+
+  /**
+   * Starts a learning path for a user by:
+   * 1. Creating initial progress record
+   * 2. Returning the first lesson to navigate to
+   */
+  static async startLearningPath(userId: string, pathId: string): Promise<{ lesson: Lesson; courseId: string; moduleId: string } | null> {
+    try {
+      if (!validateSupabase()) return null
+
+      // Get the first lesson
+      const firstLessonData = await this.getFirstLessonInPath(pathId)
+      if (!firstLessonData) {
+        return null
+      }
+
+      // Create progress record for the learning path
+      await this.updateProgress(userId, pathId, 'path', {
+        status: 'in_progress',
+        completion_percentage: 0,
+        xp_earned: 0
+      })
+
+      console.log(`✅ Started learning path ${pathId} for user ${userId}`)
+      return firstLessonData
+    } catch (error) {
+      handleError('startLearningPath', error)
+      return null
+    }
+  }
+
+  // ============================================================================
   // CACHE MANAGEMENT
   // ============================================================================
 

@@ -1685,69 +1685,90 @@ export class ContentService {
         updated_at: new Date().toISOString()
       }
 
-      // Update all courses in this learning path
-      const { error: coursesError } = await supabase
+      // Get all course IDs for this learning path
+      const { data: courses, error: coursesSelectError } = await supabase
         .from('courses')
-        .update(updateData)
+        .select('id')
         .eq('path_id', pathId)
 
-      if (coursesError) {
-        console.error('Error cascading status to courses:', coursesError)
-        throw new Error(`Failed to cascade status to courses: ${coursesError.message}`)
+      if (coursesSelectError) {
+        throw new Error(`Failed to get courses: ${coursesSelectError.message}`)
       }
 
-      // Update all modules in courses of this learning path
-      const { error: modulesError } = await supabase
-        .from('modules')
-        .update(updateData)
-        .in('course_id', 
-          supabase.from('courses').select('id').eq('path_id', pathId)
-        )
+      const courseIds = courses?.map((c: { id: string }) => c.id) || []
 
-      if (modulesError) {
-        console.error('Error cascading status to modules:', modulesError)
-        throw new Error(`Failed to cascade status to modules: ${modulesError.message}`)
-      }
+      // Update all courses in this learning path
+      if (courseIds.length > 0) {
+        const { error: coursesError } = await supabase
+          .from('courses')
+          .update(updateData)
+          .in('id', courseIds)
 
-      // Update all lessons in modules of courses in this learning path
-      const { error: lessonsError } = await supabase
-        .from('lessons')
-        .update(updateData)
-        .in('module_id',
-          supabase
+        if (coursesError) {
+          console.error('Error cascading status to courses:', coursesError)
+          throw new Error(`Failed to cascade status to courses: ${coursesError.message}`)
+        }
+
+        // Get all module IDs for these courses
+        const { data: modules, error: modulesSelectError } = await supabase
+          .from('modules')
+          .select('id')
+          .in('course_id', courseIds)
+
+        if (modulesSelectError) {
+          throw new Error(`Failed to get modules: ${modulesSelectError.message}`)
+        }
+
+                 const moduleIds = modules?.map((m: { id: string }) => m.id) || []
+
+        // Update all modules in these courses
+        if (moduleIds.length > 0) {
+          const { error: modulesError } = await supabase
             .from('modules')
-            .select('id')
-            .in('course_id', 
-              supabase.from('courses').select('id').eq('path_id', pathId)
-            )
-        )
+            .update(updateData)
+            .in('id', moduleIds)
 
-      if (lessonsError) {
-        console.error('Error cascading status to lessons:', lessonsError)
-        throw new Error(`Failed to cascade status to lessons: ${lessonsError.message}`)
-      }
+          if (modulesError) {
+            console.error('Error cascading status to modules:', modulesError)
+            throw new Error(`Failed to cascade status to modules: ${modulesError.message}`)
+          }
 
-      // Update all challenges in lessons of modules of courses in this learning path
-      const { error: challengesError } = await supabase
-        .from('challenges')
-        .update(updateData)
-        .in('lesson_id',
-          supabase
+          // Get all lesson IDs for these modules
+          const { data: lessons, error: lessonsSelectError } = await supabase
             .from('lessons')
             .select('id')
-            .in('module_id',
-              supabase
-                .from('modules')
-                .select('id')
-                .in('course_id', 
-                  supabase.from('courses').select('id').eq('path_id', pathId)
-                )
-            )
-        )
+            .in('module_id', moduleIds)
 
-      if (challengesError) {
-        console.error('Error cascading status to challenges:', challengesError)
-        throw new Error(`Failed to cascade status to challenges: ${challengesError.message}`)
+          if (lessonsSelectError) {
+            throw new Error(`Failed to get lessons: ${lessonsSelectError.message}`)
+          }
+
+                     const lessonIds = lessons?.map((l: { id: string }) => l.id) || []
+
+          // Update all lessons in these modules
+          if (lessonIds.length > 0) {
+            const { error: lessonsError } = await supabase
+              .from('lessons')
+              .update(updateData)
+              .in('id', lessonIds)
+
+            if (lessonsError) {
+              console.error('Error cascading status to lessons:', lessonsError)
+              throw new Error(`Failed to cascade status to lessons: ${lessonsError.message}`)
+            }
+
+            // Update all challenges in these lessons
+            const { error: challengesError } = await supabase
+              .from('challenges')
+              .update(updateData)
+              .in('lesson_id', lessonIds)
+
+            if (challengesError) {
+              console.error('Error cascading status to challenges:', challengesError)
+              throw new Error(`Failed to cascade status to challenges: ${challengesError.message}`)
+            }
+          }
+        }
       }
 
       console.log(`✅ Successfully cascaded status '${newStatus}' from learning path ${pathId} to all child content`)
@@ -1788,35 +1809,54 @@ export class ContentService {
         throw new Error(`Failed to cascade status to modules: ${modulesError.message}`)
       }
 
-      // Update all lessons in modules of this course
-      const { error: lessonsError } = await supabase
-        .from('lessons')
-        .update(updateData)
-        .in('module_id',
-          supabase.from('modules').select('id').eq('course_id', courseId)
-        )
+      // Get all module IDs for this course
+      const { data: modules, error: modulesSelectError } = await supabase
+        .from('modules')
+        .select('id')
+        .eq('course_id', courseId)
 
-      if (lessonsError) {
-        console.error('Error cascading status to lessons:', lessonsError)
-        throw new Error(`Failed to cascade status to lessons: ${lessonsError.message}`)
+      if (modulesSelectError) {
+        throw new Error(`Failed to get modules: ${modulesSelectError.message}`)
       }
 
-      // Update all challenges in lessons of modules of this course
-      const { error: challengesError } = await supabase
-        .from('challenges')
-        .update(updateData)
-        .in('lesson_id',
-          supabase
-            .from('lessons')
-            .select('id')
-            .in('module_id',
-              supabase.from('modules').select('id').eq('course_id', courseId)
-            )
-        )
+      const moduleIds = modules?.map((m: { id: string }) => m.id) || []
 
-      if (challengesError) {
-        console.error('Error cascading status to challenges:', challengesError)
-        throw new Error(`Failed to cascade status to challenges: ${challengesError.message}`)
+      // Update all lessons in modules of this course
+      if (moduleIds.length > 0) {
+        const { error: lessonsError } = await supabase
+          .from('lessons')
+          .update(updateData)
+          .in('module_id', moduleIds)
+
+        if (lessonsError) {
+          console.error('Error cascading status to lessons:', lessonsError)
+          throw new Error(`Failed to cascade status to lessons: ${lessonsError.message}`)
+        }
+
+        // Get all lesson IDs for these modules
+        const { data: lessons, error: lessonsSelectError } = await supabase
+          .from('lessons')
+          .select('id')
+          .in('module_id', moduleIds)
+
+        if (lessonsSelectError) {
+          throw new Error(`Failed to get lessons: ${lessonsSelectError.message}`)
+        }
+
+        const lessonIds = lessons?.map((l: { id: string }) => l.id) || []
+
+        // Update all challenges in lessons of modules of this course
+        if (lessonIds.length > 0) {
+          const { error: challengesError } = await supabase
+            .from('challenges')
+            .update(updateData)
+            .in('lesson_id', lessonIds)
+
+          if (challengesError) {
+            console.error('Error cascading status to challenges:', challengesError)
+            throw new Error(`Failed to cascade status to challenges: ${challengesError.message}`)
+          }
+        }
       }
 
       console.log(`✅ Successfully cascaded status '${newStatus}' from course ${courseId} to all child content`)
@@ -1857,18 +1897,30 @@ export class ContentService {
         throw new Error(`Failed to cascade status to lessons: ${lessonsError.message}`)
       }
 
-      // Update all challenges in lessons of this module
-      const { error: challengesError } = await supabase
-        .from('challenges')
-        .update(updateData)
-        .in('lesson_id',
-          supabase.from('lessons').select('id').eq('module_id', moduleId)
-        )
+      // Get all lesson IDs for this module
+      const { data: lessons, error: lessonsSelectError } = await supabase
+        .from('lessons')
+        .select('id')
+        .eq('module_id', moduleId)
 
-      if (challengesError) {
-        console.error('Error cascading status to challenges:', challengesError)
-        throw new Error(`Failed to cascade status to challenges: ${challengesError.message}`)
+      if (lessonsSelectError) {
+        throw new Error(`Failed to get lessons: ${lessonsSelectError.message}`)
       }
+
+      const lessonIds = lessons?.map((l: { id: string }) => l.id) || []
+
+      // Update all challenges in lessons of this module
+      if (lessonIds.length > 0) {
+        const { error: challengesError } = await supabase
+          .from('challenges')
+          .update(updateData)
+          .in('lesson_id', lessonIds)
+
+        if (challengesError) {
+          console.error('Error cascading status to challenges:', challengesError)
+          throw new Error(`Failed to cascade status to challenges: ${challengesError.message}`)
+        }
+              }
 
       console.log(`✅ Successfully cascaded status '${newStatus}' from module ${moduleId} to all child content`)
 

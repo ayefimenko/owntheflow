@@ -505,6 +505,27 @@ export default function UserProfile() {
         </div>
       )}
 
+      {/* Analytics & Insights Access */}
+      {(isAdmin || isContentManager) && (
+        <div className="bg-purple-50 border border-purple-200 rounded-lg p-6">
+          <h3 className="text-lg font-semibold text-purple-900 mb-4">
+            📊 Analytics & Insights
+          </h3>
+          <p className="text-purple-700 mb-4 text-sm">
+            View comprehensive platform analytics, user engagement metrics, and learning insights to optimize the learning experience.
+          </p>
+          <div className="flex gap-3">
+            <button 
+              onClick={() => window.location.href = '/analytics'}
+              className="bg-purple-600 text-white px-4 py-2 rounded-md hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 transition-colors"
+              type="button"
+            >
+              View Analytics Dashboard
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Sign Out */}
       <div className="text-center">
         <button

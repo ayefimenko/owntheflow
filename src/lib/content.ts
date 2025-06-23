@@ -1558,61 +1558,91 @@ export class ContentService {
     try {
       if (!validateSupabase()) return null
 
+      console.log('🔍 getFirstLessonInPath: Starting search for path:', pathId)
+
+      // Add debug check to see ALL content (including drafts)
+      await this.debugContentStructure(pathId)
+
       // Get the first published course in the learning path
       const { data: courses, error: coursesError } = await supabase
         .from('courses')
-        .select('id, title, order_index')
+        .select('id, title, sort_order')
         .eq('path_id', pathId)
         .eq('status', 'published')
-        .order('order_index')
+        .order('sort_order')
         .limit(1)
 
-      if (coursesError || !courses || courses.length === 0) {
-        console.log('No published courses found in learning path:', pathId)
+      console.log('🔍 Found courses:', courses, 'Error:', coursesError)
+
+      if (coursesError) {
+        console.error('❌ Error fetching courses:', coursesError)
+        return null
+      }
+
+      if (!courses || courses.length === 0) {
+        console.log('❌ No published courses found in learning path:', pathId)
         return null
       }
 
       const firstCourse = courses[0]
+      console.log('✅ Found first published course:', firstCourse.title, firstCourse.id)
 
-      // Get the first published module in the first course
+      // Get the first published module in the course
       const { data: modules, error: modulesError } = await supabase
         .from('modules')
-        .select('id, title, order_index')
+        .select('id, title, sort_order')
         .eq('course_id', firstCourse.id)
         .eq('status', 'published')
-        .order('order_index')
+        .order('sort_order')
         .limit(1)
 
-      if (modulesError || !modules || modules.length === 0) {
-        console.log('No published modules found in course:', firstCourse.id)
+      console.log('🔍 Found modules:', modules, 'Error:', modulesError)
+
+      if (modulesError) {
+        console.error('❌ Error fetching modules:', modulesError)
+        return null
+      }
+
+      if (!modules || modules.length === 0) {
+        console.log('❌ No published modules found in course:', firstCourse.id)
         return null
       }
 
       const firstModule = modules[0]
+      console.log('✅ Found first published module:', firstModule.title, firstModule.id)
 
-      // Get the first published lesson in the first module
+      // Get the first published lesson in the module
       const { data: lessons, error: lessonsError } = await supabase
         .from('lessons')
         .select('*')
         .eq('module_id', firstModule.id)
         .eq('status', 'published')
-        .order('order_index')
+        .order('sort_order')
         .limit(1)
 
-      if (lessonsError || !lessons || lessons.length === 0) {
-        console.log('No published lessons found in module:', firstModule.id)
+      console.log('🔍 Found lessons:', lessons, 'Error:', lessonsError)
+
+      if (lessonsError) {
+        console.error('❌ Error fetching lessons:', lessonsError)
+        return null
+      }
+
+      if (!lessons || lessons.length === 0) {
+        console.log('❌ No published lessons found in module:', firstModule.id)
         return null
       }
 
       const firstLesson = lessons[0]
+      console.log('🎉 Found first published lesson:', firstLesson.title, firstLesson.id)
 
       return {
         lesson: firstLesson,
         courseId: firstCourse.id,
         moduleId: firstModule.id
       }
+
     } catch (error) {
-      handleError('getFirstLessonInPath', error)
+      console.error('❌ Error in getFirstLessonInPath:', error)
       return null
     }
   }
@@ -1965,6 +1995,53 @@ export class ContentService {
     } catch (error) {
       console.error('Error in cascadeStatusFromLesson:', error)
       throw error
+    }
+  }
+
+  /**
+   * Debug method to check content structure (including drafts)
+   */
+  static async debugContentStructure(pathId: string): Promise<any> {
+    try {
+      if (!validateSupabase()) return null
+
+      console.log('🔍 DEBUG: Checking content structure for path:', pathId)
+
+      // Get ALL courses (including drafts)
+      const { data: courses, error: coursesError } = await supabase
+        .from('courses')
+        .select('id, title, status, sort_order')
+        .eq('path_id', pathId)
+        .order('sort_order')
+
+      console.log('🔍 DEBUG: All courses (including drafts):', courses, 'Error:', coursesError)
+
+      if (courses && courses.length > 0) {
+        // Check modules for first course
+        const { data: modules, error: modulesError } = await supabase
+          .from('modules')
+          .select('id, title, status, sort_order')
+          .eq('course_id', courses[0].id)
+          .order('sort_order')
+
+        console.log('🔍 DEBUG: All modules in first course (including drafts):', modules, 'Error:', modulesError)
+
+        if (modules && modules.length > 0) {
+          // Check lessons for first module
+          const { data: lessons, error: lessonsError } = await supabase
+            .from('lessons')
+            .select('id, title, status, sort_order')
+            .eq('module_id', modules[0].id)
+            .order('sort_order')
+
+          console.log('🔍 DEBUG: All lessons in first module (including drafts):', lessons, 'Error:', lessonsError)
+        }
+      }
+
+      return { courses, modules: null, lessons: null }
+    } catch (error) {
+      console.error('🔍 DEBUG: Error in debugContentStructure:', error)
+      return null
     }
   }
 } 

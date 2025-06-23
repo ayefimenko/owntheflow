@@ -336,7 +336,7 @@ export default function ContentDashboard() {
 
         {/* Tab Content */}
         {activeTab === 'overview' && (
-          <OverviewTab stats={stats} paths={paths} onCreatePath={handleCreatePath} />
+          <OverviewTab stats={stats} paths={paths} onCreatePath={handleCreatePath} onEditPath={handleEditPath} />
         )}
 
         {activeTab === 'curriculum' && (
@@ -455,11 +455,13 @@ export default function ContentDashboard() {
 function OverviewTab({ 
   stats, 
   paths, 
-  onCreatePath 
+  onCreatePath,
+  onEditPath
 }: { 
   stats: ContentStats | null
   paths: LearningPath[]
   onCreatePath: () => void
+  onEditPath: (path: LearningPath) => void
 }) {
   return (
     <div className="space-y-8">
@@ -467,22 +469,22 @@ function OverviewTab({
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <StatCard
           title="Learning Paths"
-          value={stats?.total_paths || 0}
-          subtitle="Total learning paths"
+          value={stats?.published_paths || 0}
+          subtitle="Published learning paths"
           icon="🛤️"
           color="blue"
         />
         <StatCard
           title="Courses"
-          value={stats?.total_courses || 0}
-          subtitle="Total courses"
+          value={stats?.published_courses || 0}
+          subtitle="Published courses"
           icon="📚"
           color="green"
         />
         <StatCard
           title="Lessons"
-          value={stats?.total_lessons || 0}
-          subtitle="Total lessons"
+          value={stats?.published_lessons || 0}
+          subtitle="Published lessons"
           icon="📖"
           color="purple"
         />
@@ -548,9 +550,15 @@ function OverviewTab({
                   `}>
                     {path.status}
                   </span>
-                  <button className="text-blue-600 hover:text-blue-700 text-sm transition-colors" type="button">
-                    Edit
-                  </button>
+                  <ContentEditorOnly>
+                    <button 
+                      onClick={() => onEditPath(path)}
+                      className="text-blue-600 hover:text-blue-700 text-sm transition-colors" 
+                      type="button"
+                    >
+                      Edit
+                    </button>
+                  </ContentEditorOnly>
                 </div>
               </div>
             ))}
